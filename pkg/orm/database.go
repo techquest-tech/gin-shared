@@ -5,8 +5,13 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/spf13/viper"
+	ginshared "github.com/techquest-tech/gin-shared/pkg/gin"
 	"go.uber.org/zap"
 )
+
+func init() {
+	ginshared.GetContainer().Provide(InitDB)
+}
 
 func InitDB(logger *zap.Logger) *gorm.DB {
 	dbSettings := viper.Sub("database")
