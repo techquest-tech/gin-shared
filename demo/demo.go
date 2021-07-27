@@ -10,9 +10,10 @@ import (
 type DemoController struct {
 }
 
-func (d *DemoController) GetControllerName() string {
-	return "helloWorld"
-}
+// func (d *DemoController) GetControllerName() string {
+// 	return "helloWorld"
+// }
+
 func (d *DemoController) Hello(c *gin.Context) {
 	c.JSON(200, gin.H{"hello": "world"})
 }
