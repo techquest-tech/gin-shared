@@ -18,15 +18,21 @@ const (
 	KeyAddress = "address"
 )
 
+var AppName = "app"
+
 var ControllerOptions = dig.Group("controllers")
 
-func initLogger() *zap.Logger {
+// var PreStarterOptions = dig.Group("PreStarter")
 
-	logger := zap.NewExample()
+func InitConfig() {
 
-	viper.SetDefault(KeyAddress, ":5000")
+	appname := os.Getenv("APP_NAME")
+	if appname != "" {
+		AppName = appname
+		fmt.Printf("user AppName = %s", appname)
+	}
 
-	viper.SetConfigName("app")
+	viper.SetConfigName(AppName)
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath("config")
 	viper.AddConfigPath("../config")
@@ -47,24 +53,24 @@ func initLogger() *zap.Logger {
 		profileConfig.AddConfigPath("../config")
 		err := profileConfig.ReadInConfig()
 		if err != nil {
-			logger.Error("error while load env profile",
-				zap.String("env", envfile),
-				zap.Any("error", err),
-			)
+			// logger.Error("error while load env profile",
+			// 	zap.String("env", envfile),
+			// 	zap.Any("error", err),
+			// )
+			log.Fatalf("error while load env profile %s. %v", envfile, err)
 			panic(err)
 		}
 		result := profileConfig.AllSettings()
 		viper.MergeConfigMap(result)
-		logger.Debug("env profile loaded.", zap.Any("result", result), zap.String("env", envfile))
-	} else {
-		logger.Info("no env profiled found.")
+		// logger.Debug("env profile loaded.", zap.Any("result", result), zap.String("env", envfile))
+		log.Printf("env profile %s loaded", envfile)
 	}
 
-	logger.Info("Config loaded.")
-	return logger
+	log.Print("load config done.")
 }
 
 func initEngine(logger *zap.Logger) *gin.Engine {
+
 	router := gin.New()
 	router.Use(ginzap.Ginzap(logger, time.RFC3339, false))
 	router.Use(ginzap.RecoveryWithZap(logger, true))
@@ -106,6 +112,8 @@ type Params struct {
 func Start() error {
 	// container.Provide(NewService)
 	err := container.Invoke(func(p Params) error {
+
+		viper.SetDefault(KeyAddress, ":5000")
 
 		address := viper.GetString(KeyAddress)
 
