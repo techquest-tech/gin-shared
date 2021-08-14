@@ -1,6 +1,8 @@
 // +build mysql
 package orm
 
-import (
-	_ "github.com/jinzhu/gorm/dialects/mysql"
-)
+import "gorm.io/driver/mysql"
+
+func init() {
+	DialectorMap["mysql"] = mysql.Open
+}
