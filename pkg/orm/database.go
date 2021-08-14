@@ -3,15 +3,19 @@ package orm
 import (
 	"fmt"
 
-	"github.com/jinzhu/gorm"
 	"github.com/spf13/viper"
 	ginshared "github.com/techquest-tech/gin-shared/pkg/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 func init() {
 	ginshared.GetContainer().Provide(InitDB)
 }
+
+type OrmDialector func(dsn string) gorm.Dialector
+
+var DialectorMap = make(map[string]OrmDialector)
 
 func InitDB(logger *zap.Logger) *gorm.DB {
 	dbSettings := viper.Sub("database")
@@ -25,14 +29,18 @@ func InitDB(logger *zap.Logger) *gorm.DB {
 	max := dbSettings.GetInt("max")
 	idel := dbSettings.GetInt("idel")
 
-	db, err := gorm.Open(dbType, uri)
+	f := DialectorMap[dbType]
+
+	db, err := gorm.Open(f(uri), &gorm.Config{
+		PrepareStmt: true,
+	})
 
 	if err != nil {
 		panic(fmt.Sprintf("connect to db failed. err: %+v", err))
 	}
 
 	// See "Important settings" section.
-	pool := db.DB()
+	pool, _ := db.DB()
 	pool.SetConnMaxIdleTime(maxLifetime)
 	pool.SetMaxOpenConns(max)
 	pool.SetMaxIdleConns(idel)

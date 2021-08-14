@@ -4,9 +4,10 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
+
 	"github.com/spf13/viper"
 	ginshared "github.com/techquest-tech/gin-shared/pkg/gin"
+	"gorm.io/gorm"
 )
 
 const (
@@ -19,12 +20,20 @@ type HealthController struct {
 }
 
 func (h *HealthController) Ping(c *gin.Context) {
-	err := h.db.DB().Ping()
+
 	statusCode := 200
 	statusMessage := "OK"
+
+	db, err := h.db.DB()
 	if err != nil {
 		statusCode = 500
 		statusMessage = fmt.Sprintf("connection to db failed. %v", err)
+	}
+
+	err = db.Ping()
+	if err != nil {
+		statusCode = 500
+		statusMessage = fmt.Sprintf("ping test failed. %v", err)
 	}
 
 	c.JSON(statusCode, gin.H{"status": statusMessage})

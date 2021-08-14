@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
 	root "github.com/techquest-tech/gin-shared/pkg/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 func init() {
