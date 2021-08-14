@@ -31,9 +31,15 @@ func InitDB(logger *zap.Logger) *gorm.DB {
 
 	f := DialectorMap[dbType]
 
-	db, err := gorm.Open(f(uri), &gorm.Config{
+	cfg := &gorm.Config{
 		PrepareStmt: true,
-	})
+	}
+	cfgorm := dbSettings.Sub("gorm")
+	if cfgorm != nil {
+		cfgorm.Unmarshal(cfg)
+	}
+
+	db, err := gorm.Open(f(uri), cfg)
 
 	if err != nil {
 		panic(fmt.Sprintf("connect to db failed. err: %+v", err))
