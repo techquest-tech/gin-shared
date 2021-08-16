@@ -1,4 +1,3 @@
-// +build mysql
 package orm
 
 import "gorm.io/driver/mysql"

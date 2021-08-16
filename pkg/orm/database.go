@@ -29,7 +29,11 @@ func InitDB(logger *zap.Logger) *gorm.DB {
 	max := dbSettings.GetInt("max")
 	idel := dbSettings.GetInt("idel")
 
-	f := DialectorMap[dbType]
+	f, ok := DialectorMap[dbType]
+
+	if !ok {
+		panic(fmt.Errorf("driver %s is missed", dbType))
+	}
 
 	cfg := &gorm.Config{
 		PrepareStmt: true,
