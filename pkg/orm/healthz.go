@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/spf13/viper"
-	ginshared "github.com/techquest-tech/gin-shared/pkg/gin"
+	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"gorm.io/gorm"
 )
 

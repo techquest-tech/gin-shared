@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/viper"
-	ginshared "github.com/techquest-tech/gin-shared/pkg/gin"
+	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

@@ -1,4 +1,4 @@
-package gin
+package ginshared
 
 import (
 	"go.uber.org/dig"

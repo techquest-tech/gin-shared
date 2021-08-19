@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	ginshared "github.com/techquest-tech/gin-shared/pkg/gin"
+	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 )
 
 type DemoController struct {

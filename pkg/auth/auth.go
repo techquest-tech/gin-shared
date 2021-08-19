@@ -4,13 +4,13 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	root "github.com/techquest-tech/gin-shared/pkg/gin"
+	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 func init() {
-	root.GetContainer().Provide(func(db *gorm.DB, logger *zap.Logger) *AuthService {
+	ginshared.GetContainer().Provide(func(db *gorm.DB, logger *zap.Logger) *AuthService {
 		authService := &AuthService{
 			Db:     db,
 			logger: logger,
