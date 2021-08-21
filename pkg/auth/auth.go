@@ -6,15 +6,22 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
+	"go.uber.org/dig"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
+type AuthServiceParam struct {
+	dig.In
+	DB     *gorm.DB `optional:"true"`
+	Logger *zap.Logger
+}
+
 func init() {
-	ginshared.GetContainer().Provide(func(db *gorm.DB, logger *zap.Logger) *AuthService {
+	ginshared.GetContainer().Provide(func(ap AuthServiceParam) *AuthService {
 		authService := &AuthService{
-			Db:     db,
-			logger: logger,
+			Db:     ap.DB,
+			logger: ap.Logger,
 		}
 		authSetting := viper.Sub("auth")
 		authSetting.SetDefault("SQL", CheckSql)
@@ -44,8 +51,14 @@ func (a *AuthService) checkKey(key string) bool {
 
 	for _, k := range a.Keys {
 		if k == key {
+			a.logger.Info("use build-in key")
 			return true
 		}
+	}
+
+	if a.Db == nil {
+		a.logger.Warn("DB is not enabled for Auth service.")
+		return false
 	}
 
 	authkey := AuthKey{}
