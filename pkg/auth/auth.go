@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -15,8 +16,14 @@ func init() {
 			Db:     db,
 			logger: logger,
 		}
+		authSetting := viper.Sub("auth")
+		authSetting.SetDefault("SQL", CheckSql)
+		if authService != nil {
+			authSetting.Unmarshal(authService)
+		}
 		return authService
 	})
+	ginshared.GetContainer().Provide(NewRouterRequiredAuth)
 }
 
 type AuthKey struct {
@@ -27,13 +34,22 @@ type AuthKey struct {
 type AuthService struct {
 	Db     *gorm.DB
 	logger *zap.Logger
+	SQL    string
+	Keys   []string
 }
 
 const CheckSql = "SELECT id,remark from appusers a where a.IsDeleted = 0 and a.AppKey = ?"
 
 func (a *AuthService) checkKey(key string) bool {
+
+	for _, k := range a.Keys {
+		if k == key {
+			return true
+		}
+	}
+
 	authkey := AuthKey{}
-	err := a.Db.Raw(CheckSql, key).Scan(&authkey).Error
+	err := a.Db.Raw(a.SQL, key).Scan(&authkey).Error
 
 	if err != nil {
 		a.logger.Error("sql query error", zap.Any("error", err))
@@ -71,4 +87,11 @@ func (a *AuthService) Auth(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, resp)
 		c.Abort()
 	}
+}
+
+type AuthGroutRoute gin.IRoutes
+
+func NewRouterRequiredAuth(group *gin.RouterGroup, auth *AuthService) AuthGroutRoute {
+	result := group.Use(auth.Auth)
+	return AuthGroutRoute(result)
 }
