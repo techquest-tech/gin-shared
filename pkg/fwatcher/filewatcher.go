@@ -3,7 +3,7 @@ package fwatcher
 import (
 	"context"
 	"errors"
-	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +34,7 @@ var mu sync.RWMutex
 type FilelWatcher struct {
 	Logger        *zap.Logger
 	Action        FileAction
+	Recursive     bool
 	Path          string
 	Interval      time.Duration
 	Included      []string
@@ -74,12 +75,14 @@ func (e *FilelWatcher) ScheduleWalk(ctx context.Context) {
 	e.Logger.Info("schedule walk job done. ", zap.Duration("interval", e.Interval))
 }
 
-func (e *FilelWatcher) StartWatcher(ctx context.Context) {
+func (e *FilelWatcher) StartWatcher(ctx context.Context) error {
 	watcher, err := fsnotify.NewWatcher()
 
 	if err != nil {
-		errMsg := fmt.Sprintf("new watcher failed. %+v", err)
-		panic(errMsg)
+		// errMsg := fmt.Sprintf("new watcher failed. %+v", err)
+		// panic(errMsg)
+		e.Logger.Error("new watcher failed", zap.Any("error", err))
+		return err
 	}
 
 	e.Logger.Info("file watcher started. ", zap.String("path", e.Path))
@@ -111,7 +114,18 @@ func (e *FilelWatcher) StartWatcher(ctx context.Context) {
 
 				fullfilename := event.Name
 
+				stat, err := os.Stat(fullfilename)
+				if err != nil {
+					e.Logger.Warn("stat file return error",
+						zap.String("file", fullfilename),
+						zap.Any("error", err),
+					)
+				}
+
 				switch {
+				case stat.IsDir() && event.Op&fsnotify.Create == fsnotify.Create && e.Recursive:
+					watcher.Add(fullfilename)
+					e.Logger.Info("monitor new created folder", zap.String("folder", fullfilename))
 				case event.Op&fsnotify.Create == fsnotify.Create,
 					event.Op&fsnotify.Write == fsnotify.Write,
 					event.Op&fsnotify.Chmod == fsnotify.Chmod:
@@ -126,12 +140,32 @@ func (e *FilelWatcher) StartWatcher(ctx context.Context) {
 
 	err = watcher.Add(e.Path)
 	if err != nil {
-		errMsg := fmt.Errorf("start watcher failed for folder %s, %+v", e.Path, err)
-		panic(errMsg)
+		// errMsg := fmt.Errorf("start watcher failed for folder %s, %+v", e.Path, err)
+		// panic(errMsg)
+		e.Logger.Error("add folder to watcher failed.",
+			zap.String("folder", e.Path),
+			zap.Any("error", err),
+		)
+	}
+	if e.Recursive {
+		filepath.Walk(e.Path, func(path string, info fs.FileInfo, err error) error {
+			if info.IsDir() {
+				err := watcher.Add(path)
+				if err != nil {
+					e.Logger.Error("add folder to watcher failed.",
+						zap.String("folder", path),
+						zap.Any("error", err),
+					)
+					return err
+				}
+				e.Logger.Info("watch folder done", zap.String("folder", path))
+			}
+			return nil
+		})
 	}
 
 	e.Logger.Info("excel watcher is ready")
-
+	return nil
 }
 
 func (e *FilelWatcher) Filter(file string) bool {
@@ -165,25 +199,24 @@ func (e *FilelWatcher) Filter(file string) bool {
 }
 
 func (e *FilelWatcher) Walk() {
-	files, err := os.ReadDir(e.Path)
-	if err != nil {
-		e.Logger.Error("failed to walk folder")
-		return
-	}
-	for _, file := range files {
-
-		switch {
-		case strings.HasPrefix(file.Name(), "."):
-			e.Logger.Info("ignored hidden file.", zap.String("file", file.Name()))
-
-		case file.IsDir():
-			e.Logger.Debug("currently don't support sub folder. will be next version")
-
-		default:
-			fullpath := filepath.Join(e.Path, file.Name())
-			e.handleFile(fullpath)
+	filepath.Walk(e.Path, func(path string, info fs.FileInfo, err error) error {
+		if !e.Recursive {
+			depth := strings.Count(path, "/") - strings.Count(e.Path, "/")
+			if depth > 1 {
+				e.Logger.Info("recursive disabled. ignore all sub folders")
+				return filepath.SkipDir
+			}
 		}
-	}
+		switch {
+		case strings.HasPrefix(info.Name(), "."):
+			e.Logger.Info("ignored hidden file.", zap.String("file", info.Name()))
+		case info.IsDir():
+			e.Logger.Debug("walk into sub folder", zap.String("sub folder", path))
+		default:
+			e.handleFile(path)
+		}
+		return nil
+	})
 }
 
 func (e *FilelWatcher) handleFile(file string) {
@@ -235,8 +268,9 @@ func NewWatchExcelFolder(ctx context.Context, logger *zap.Logger, action FileAct
 	settings.Unmarshal(excelwatch)
 
 	if len(excelwatch.Included) == 0 {
-		excelwatch.Included = []string{"*.xlsx"}
+		excelwatch.Included = []string{"*.*"}
 	}
+
 	if len(excelwatch.Excluded) == 0 {
 		excelwatch.Excluded = []string{"~*", ".*"}
 	}
