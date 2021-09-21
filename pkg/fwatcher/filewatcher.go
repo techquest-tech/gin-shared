@@ -14,6 +14,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
+	"go.uber.org/dig"
 	"go.uber.org/zap"
 )
 
@@ -23,12 +24,18 @@ func init() {
 
 const (
 	KeyExcelFolder = "path"
-	ExcelFolder    = "data/excel"
+	// ExcelFolder    = "data/excel"
 )
 
 var ErrorOpenFileFailed = errors.New("failed to open file")
 
 var mu sync.RWMutex
+
+var FileWatcheSettingKey = "files"
+
+type FileAction interface {
+	HandleFile(file string) error
+}
 
 // FileWatcher, not support recursion & idempotent yet.
 type FilelWatcher struct {
@@ -41,11 +48,12 @@ type FilelWatcher struct {
 	Excluded      []string
 	RetryDelay    time.Duration
 	RetryAttempts uint
+	Delete        bool
 	DoneFolder    string
 	ErrorFolder   string
 }
 
-type FileAction func(file string) error
+// type FileAction func(file string) error
 
 func (e *FilelWatcher) StartService(ctx context.Context) {
 	e.Walk()
@@ -202,7 +210,7 @@ func (e *FilelWatcher) Walk() {
 	filepath.Walk(e.Path, func(path string, info fs.FileInfo, err error) error {
 		if !e.Recursive {
 			depth := strings.Count(path, "/") - strings.Count(e.Path, "/")
-			if depth > 1 {
+			if depth > 2 {
 				e.Logger.Info("recursive disabled. ignore all sub folders")
 				return filepath.SkipDir
 			}
@@ -234,7 +242,7 @@ func (e *FilelWatcher) handleFile(file string) {
 	}
 
 	err := retry.Do(func() error {
-		return e.Action(file)
+		return e.Action.HandleFile(file)
 	})
 
 	if err != nil {
@@ -242,58 +250,77 @@ func (e *FilelWatcher) handleFile(file string) {
 		if e.ErrorFolder != "" {
 			mv(file, e.ErrorFolder, e.Logger)
 		}
+		return
 	}
 	if e.DoneFolder != "" {
 		mv(file, e.DoneFolder, e.Logger)
+		return
+	}
+	if e.Delete {
+		err := os.Remove(file)
+		if err != nil {
+			e.Logger.Error("delete file failed.", zap.String("file", file), zap.Any("error", err))
+			return
+		}
+		e.Logger.Info("delete file done", zap.String("file", file))
 	}
 }
 
-func NewWatchExcelFolder(ctx context.Context, logger *zap.Logger, action FileAction) ginshared.DiController {
+type FileWatcherParams struct {
+	dig.In
+	Ctx        context.Context
+	Logger     *zap.Logger
+	Action     FileAction
+	Idempotent *FileIdempotent `optional:"true"`
+}
 
-	settings := viper.Sub("excel")
+func NewWatchExcelFolder(p FileWatcherParams) ginshared.DiController {
+
+	settings := viper.Sub(FileWatcheSettingKey)
 	if settings.GetBool("disabled") {
-		logger.Info("excel watcher is disabled.")
+		p.Logger.Info("file watcher is disabled.")
 		return nil
 	}
-	excelwatch := &FilelWatcher{
-		Logger: logger.With(zap.String("service", "excelwatcher")),
-		Action: action,
+	filewatcher := &FilelWatcher{
+		Logger: p.Logger.With(zap.String("service", "filewatcher")),
+		Action: p.Action,
 	}
 
-	settings.SetDefault(KeyExcelFolder, ExcelFolder)
+	// settings.SetDefault(KeyExcelFolder, ExcelFolder)
 	settings.SetDefault("retryDelay", 100*time.Microsecond)
 	settings.SetDefault("retryAttempts", uint(30))
-	settings.SetDefault("doneFolder", "done")
 
-	settings.Unmarshal(excelwatch)
+	// settings.SetDefault("doneFolder", "done")
 
-	if len(excelwatch.Included) == 0 {
-		excelwatch.Included = []string{"*.*"}
+	settings.Unmarshal(filewatcher)
+
+	if len(filewatcher.Included) == 0 {
+		filewatcher.Included = []string{"*.*"}
 	}
 
-	if len(excelwatch.Excluded) == 0 {
-		excelwatch.Excluded = []string{"~*", ".*"}
+	if len(filewatcher.Excluded) == 0 {
+		filewatcher.Excluded = []string{"~*", ".*"}
 	}
 
 	//init folder for done or error
-	if excelwatch.DoneFolder != "" {
-		folder := filepath.Join(excelwatch.Path, excelwatch.DoneFolder)
-		os.MkdirAll(folder, 0755)
+	if filewatcher.DoneFolder != "" {
+		// folder := filepath.Join(filewatcher.Path, filewatcher.DoneFolder)
+		os.MkdirAll(filewatcher.DoneFolder, 0755)
 	}
-	if excelwatch.ErrorFolder != "" {
-		folder := filepath.Join(excelwatch.Path, excelwatch.ErrorFolder)
-		os.MkdirAll(folder, 0755)
+	if filewatcher.ErrorFolder != "" {
+		// folder := filepath.Join(filewatcher.Path, filewatcher.ErrorFolder)
+		os.MkdirAll(filewatcher.ErrorFolder, 0755)
 	}
 
 	//init retry
-	retry.DefaultAttempts = excelwatch.RetryAttempts
-	retry.DefaultDelay = excelwatch.RetryDelay
+	retry.DefaultAttempts = filewatcher.RetryAttempts
+	retry.DefaultDelay = filewatcher.RetryDelay
 
 	retry.DefaultRetryIf = func(err error) bool {
 		return err == ErrorOpenFileFailed
 	}
 
-	excelwatch.StartService(ctx)
+	filewatcher.StartService(p.Ctx)
 
-	return excelwatch
+	return filewatcher
 }
