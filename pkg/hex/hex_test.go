@@ -3,7 +3,7 @@ package hex
 import (
 	"bytes"
 	"encoding/hex"
-	"log"
+	"fmt"
 	"testing"
 )
 
@@ -12,30 +12,34 @@ func TestHex2(t *testing.T) {
 }
 
 func TestHex(t *testing.T) {
-	buffer := bytes.Buffer{}
 
-	buffer.Write([]byte("VTD"))
-	//Company 24bit
-	company := []byte{0, 0, 0}
-	buffer.Write(company)
-	managedCode := []byte{0, 0, 0, 0}
-	buffer.Write(managedCode)
+	for index := 1; index <= 5000; index++ {
+		buffer := bytes.Buffer{}
 
-	searialNo := uint16(5000)
-	h, l := uint8(searialNo>>8), uint8(searialNo&0xff)
-	buffer.WriteByte(h)
-	buffer.WriteByte(l)
+		buffer.Write([]byte("VTD"))
+		//Company 24bit
+		company := []byte{0, 0, 0}
+		buffer.Write(company)
+		managedCode := []byte{0, 0, 0, 0}
+		buffer.Write(managedCode)
 
-	src := buffer.Bytes()
-	maxlen := hex.EncodedLen(len(src))
+		searialNo := uint16(index)
+		h, l := uint8(searialNo>>8), uint8(searialNo&0xff)
+		buffer.WriteByte(h)
+		buffer.WriteByte(l)
 
-	dst := make([]byte, maxlen)
-	len := hex.Encode(dst, src)
-	// assert.Nil(t, err)
+		src := buffer.Bytes()
+		maxlen := hex.EncodedLen(len(src))
 
-	// log.Printf("decode lens %d", len)
+		dst := make([]byte, maxlen)
+		len := hex.Encode(dst, src)
+		// assert.Nil(t, err)
 
-	// result := hex.Dump(dst)
-	log.Printf("result: %s", string(dst[:len]))
-	log.Printf("encoding string %s", hex.EncodeToString(src))
+		// log.Printf("decode lens %d", len)
+
+		// result := hex.Dump(dst)
+		fmt.Println(string(dst[:len]))
+	}
+
+	// log.Printf("encoding string %s", hex.EncodeToString(src))
 }

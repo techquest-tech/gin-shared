@@ -24,10 +24,16 @@ func init() {
 			logger: ap.Logger,
 		}
 		authSetting := viper.Sub("auth")
-		authSetting.SetDefault("SQL", CheckSql)
-		if authService != nil {
-			authSetting.Unmarshal(authService)
+		if authSetting != nil {
+			if authService != nil {
+				authSetting.Unmarshal(authService)
+			}
 		}
+
+		if authService.SQL == "" {
+			authService.SQL = CheckSql
+		}
+
 		return authService
 	})
 	ginshared.GetContainer().Provide(NewRouterRequiredAuth)
