@@ -13,6 +13,8 @@ func init() {
 	ginshared.GetContainer().Provide(InitDB)
 }
 
+const KeyInitDB = "database.initDB"
+
 type OrmDialector func(dsn string) gorm.Dialector
 
 var DialectorMap = make(map[string]OrmDialector)
