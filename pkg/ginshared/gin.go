@@ -92,16 +92,9 @@ func initEngine(logger *zap.Logger) *gin.Engine {
 	if corsSettings != nil {
 		enabled := corsSettings.GetBool("enabled")
 		if enabled {
-			// config := cors.DefaultConfig()
-			// err := corsSettings.Unmarshal(&config)
-			// if err != nil {
-			// 	logger.Warn("CORS settings failed", zap.Any("error", err))
-			// 	return router
-			// }
 			router.Use(cors.Default())
-			logger.Info("CORS enabled. currently allow all")
+			logger.Info("CORS enabled, defaults allow all")
 		}
-
 	}
 	return router
 }
