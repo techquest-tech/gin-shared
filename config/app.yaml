@@ -1,6 +1,11 @@
 address: 127.0.0.1:5000
 baseUri: /api/det/stocktaking
 
+cors:
+  enabled: true
+  allowAllOrigins: true
+
+
 prometheus:
   enabled: true
   

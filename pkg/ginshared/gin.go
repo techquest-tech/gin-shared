@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Depado/ginprom"
+	"github.com/gin-contrib/cors"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -84,6 +85,23 @@ func initEngine(logger *zap.Logger) *gin.Engine {
 		)
 		router.Use(p.Instrument())
 		logger.Info("prometheus module enabled.")
+	}
+
+	//check CORS settings
+	corsSettings := viper.Sub("CORS")
+	if corsSettings != nil {
+		enabled := corsSettings.GetBool("enabled")
+		if enabled {
+			// config := cors.DefaultConfig()
+			// err := corsSettings.Unmarshal(&config)
+			// if err != nil {
+			// 	logger.Warn("CORS settings failed", zap.Any("error", err))
+			// 	return router
+			// }
+			router.Use(cors.Default())
+			logger.Info("CORS enabled. currently allow all")
+		}
+
 	}
 	return router
 }
