@@ -9,34 +9,46 @@ import (
 
 type GeneralResp struct {
 	Succ         bool
+	ErrorCode    string
 	ErrorMessage string
 	Data         interface{}
 }
 
 type ReportError struct {
-	ErrorCode int
+	ReplyCode int
 	logger    *zap.Logger
+}
+
+type ErrorCode interface {
+	ErrorCode() string
+}
+
+func (handle *ReportError) RespErrorToClient(c *gin.Context, err interface{}) {
+	handle.logger.Error("error found", zap.Any("error", err))
+	errorResp := GeneralResp{
+		Succ:         false,
+		ErrorMessage: fmt.Sprintf("%+v", err),
+	}
+	if code, ok := err.(ErrorCode); ok {
+		errorResp.ErrorCode = code.ErrorCode()
+	}
+	c.JSON(int(handle.ReplyCode), errorResp)
+	c.Abort()
 }
 
 func (handle *ReportError) Middleware(c *gin.Context) {
 	defer func() {
 		if err := recover(); err != nil {
-			handle.logger.Error("error found", zap.Any("error", err))
-			errorResp := GeneralResp{
-				Succ:         false,
-				ErrorMessage: fmt.Sprintf("%+v", err),
-			}
-			c.JSON(int(handle.ErrorCode), errorResp)
-			c.Abort()
+			handle.RespErrorToClient(c, err)
 		}
 	}()
 
 	c.Next()
 }
 
-func NewErrorReport(errorCode int, logger *zap.Logger) gin.HandlerFunc {
+func NewErrorReport(replyCode int, logger *zap.Logger) gin.HandlerFunc {
 	r := ReportError{
-		ErrorCode: errorCode,
+		ReplyCode: replyCode,
 		logger:    logger,
 	}
 	return r.Middleware

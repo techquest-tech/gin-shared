@@ -7,13 +7,17 @@ import (
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 func init() {
 	ginshared.GetContainer().Provide(InitDB)
 }
 
-const KeyInitDB = "database.initDB"
+const (
+	KeyInitDB      = "database.initDB"
+	KeyTablePrefix = "database.tablePrefix"
+)
 
 type OrmDialector func(dsn string) gorm.Dialector
 
@@ -40,9 +44,18 @@ func InitDB(logger *zap.Logger) *gorm.DB {
 	cfg := &gorm.Config{
 		PrepareStmt: true,
 	}
+
 	cfgorm := dbSettings.Sub("gorm")
 	if cfgorm != nil {
 		cfgorm.Unmarshal(cfg)
+	}
+
+	tablePrefix := dbSettings.GetString("tablePrefix")
+	if tablePrefix != "" {
+		cfg.NamingStrategy = schema.NamingStrategy{
+			TablePrefix: tablePrefix,
+		}
+		logger.Info("user table prefix", zap.String("tableprefix", tablePrefix))
 	}
 
 	db, err := gorm.Open(f(uri), cfg)
