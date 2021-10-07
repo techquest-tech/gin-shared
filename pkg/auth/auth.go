@@ -91,7 +91,12 @@ func (a *AuthService) Auth(c *gin.Context) {
 	}
 
 	if key == "" {
-		resp := map[string]string{"error": "apiKey missed"}
+		resp := ginshared.GeneralResp{
+			Succ:         false,
+			ErrorCode:    "AuthFailed",
+			ErrorMessage: "API Key missed",
+		}
+		// map[string]string{"errorMessage": "apiKey missed"}
 
 		c.JSON(401, resp)
 		c.Abort()
@@ -101,7 +106,12 @@ func (a *AuthService) Auth(c *gin.Context) {
 	if a.checkKey(key) {
 		c.Next()
 	} else {
-		resp := map[string]string{"error": "apiKey mismatched or been deleted"}
+		resp := ginshared.GeneralResp{
+			Succ:         false,
+			ErrorCode:    "AuthFailed",
+			ErrorMessage: "apiKey mismatched or been deleted",
+		}
+		// map[string]string{"errorMessage": "apiKey mismatched or been deleted"}
 
 		c.JSON(http.StatusUnauthorized, resp)
 		c.Abort()
