@@ -50,7 +50,9 @@ func initLogger() (*zap.Logger, error) {
 
 	config.Level.SetLevel(level.Level())
 
-	config.DisableStacktrace = true
+	if !settings.GetBool("trace") {
+		config.DisableStacktrace = true
+	}
 
 	//check if rotate enabled.
 	if settings.GetBool("rotate") {
