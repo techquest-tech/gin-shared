@@ -23,8 +23,12 @@ type OrmDialector func(dsn string) gorm.Dialector
 
 var DialectorMap = make(map[string]OrmDialector)
 
-func InitDB(logger *zap.Logger) *gorm.DB {
-	dbSettings := viper.Sub("database")
+func InitDefaultDB(logger *zap.Logger) *gorm.DB {
+	return InitDB("database", logger)
+}
+
+func InitDB(sub string, logger *zap.Logger) *gorm.DB {
+	dbSettings := viper.Sub(sub)
 
 	dbSettings.SetDefault("type", "mysql")
 
