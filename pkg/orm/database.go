@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	ginshared.GetContainer().Provide(InitDB)
+	ginshared.GetContainer().Provide(InitDefaultDB)
 }
 
 const (
