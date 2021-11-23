@@ -1,6 +1,14 @@
 address: 127.0.0.1:5000
 baseUri: /api/det/stocktaking
 
+
+keycloak:
+  service: hazzys
+  url: https://sso.sit-k8s.esquel.cn/
+  realm: rfid
+  roles:
+  - hazzys
+
 cors:
   enabled: true
   allowAllOrigins: true
