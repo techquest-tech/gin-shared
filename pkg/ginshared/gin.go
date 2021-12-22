@@ -17,6 +17,7 @@ import (
 
 const (
 	KeyAddress = "address"
+	KeyInitDB  = "database.initDB"
 )
 
 var AppName = "app"

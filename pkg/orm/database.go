@@ -15,7 +15,7 @@ func init() {
 }
 
 const (
-	KeyInitDB      = "database.initDB"
+	KeyInitDB      = ginshared.KeyInitDB
 	KeyTablePrefix = "database.tablePrefix"
 )
 

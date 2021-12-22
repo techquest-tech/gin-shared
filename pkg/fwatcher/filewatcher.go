@@ -51,6 +51,7 @@ type FilelWatcher struct {
 	Delete        bool
 	DoneFolder    string
 	ErrorFolder   string
+	Idempotent    *FileIdempotentService
 }
 
 // type FileAction func(file string) error
@@ -232,6 +233,19 @@ func (e *FilelWatcher) handleFile(file string) {
 		e.Logger.Info("file is not included.", zap.String("file", file))
 		return
 	}
+
+	if e.Idempotent != nil {
+		result, err := e.Idempotent.Idempotent(file)
+		if err != nil {
+			e.Logger.Error("process file failed on Idempotent", zap.Error(err))
+			return
+		}
+		if !result {
+			e.Logger.Info("file idempotent return false, file has been processed before.")
+			return
+		}
+	}
+
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -271,7 +285,7 @@ type FileWatcherParams struct {
 	Ctx        context.Context
 	Logger     *zap.Logger
 	Action     FileAction
-	Idempotent *FileIdempotent `optional:"true"`
+	Idempotent *FileIdempotentService `optional:"true"`
 }
 
 func NewWatchExcelFolder(p FileWatcherParams) ginshared.DiController {
@@ -318,6 +332,10 @@ func NewWatchExcelFolder(p FileWatcherParams) ginshared.DiController {
 
 	retry.DefaultRetryIf = func(err error) bool {
 		return err == ErrorOpenFileFailed
+	}
+
+	if !filewatcher.Delete && filewatcher.DoneFolder == "" {
+		filewatcher.Idempotent = p.Idempotent
 	}
 
 	filewatcher.StartService(p.Ctx)

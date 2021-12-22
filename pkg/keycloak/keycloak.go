@@ -1,4 +1,4 @@
-package auth
+package keycloak
 
 import (
 	"github.com/gin-gonic/gin"

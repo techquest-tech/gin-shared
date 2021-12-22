@@ -17,6 +17,10 @@ type AuthServiceParam struct {
 	Logger *zap.Logger
 }
 
+const (
+	KeyUser = "currentUser"
+)
+
 func init() {
 	ginshared.GetContainer().Provide(func(ap AuthServiceParam) *AuthService {
 		authService := &AuthService{
@@ -30,8 +34,8 @@ func init() {
 			}
 		}
 
-		if authService.SQL == "" {
-			authService.SQL = CheckSql
+		if viper.GetBool(ginshared.KeyInitDB) {
+			ap.DB.AutoMigrate(&AuthKey{})
 		}
 
 		return authService
@@ -40,42 +44,44 @@ func init() {
 }
 
 type AuthKey struct {
-	ID     uint
-	Remark string
+	gorm.Model
+	ApiKey string `gorm:"size:64"`
+	Owner  string `gorm:"size:64"`
+	Remark string `gorm:"size:64"`
 }
 
 type AuthService struct {
 	Db     *gorm.DB
 	logger *zap.Logger
-	SQL    string
-	Keys   []string
+	// SQL    string
+	Keys []string
 }
 
-const CheckSql = "SELECT id,remark from appusers a where a.IsDeleted = 0 and a.AppKey = ?"
+// const CheckSql = "SELECT id,remark from appusers a where a.IsDeleted = 0 and a.AppKey = ?"
 
-func (a *AuthService) checkKey(key string) bool {
+func (a *AuthService) checkKey(key string) (uint, bool) {
 
 	for _, k := range a.Keys {
 		if k == key {
 			a.logger.Info("use build-in key")
-			return true
+			return 0, true
 		}
 	}
 
 	if a.Db == nil {
 		a.logger.Warn("DB is not enabled for Auth service.")
-		return false
+		return 0, false
 	}
 
 	authkey := AuthKey{}
-	err := a.Db.Raw(a.SQL, key).Scan(&authkey).Error
+	err := a.Db.First(&authkey, "api_key = ?", key).Error
 
 	if err != nil {
 		a.logger.Error("sql query error", zap.Any("error", err))
-		return false
+		return 0, false
 	}
 
-	return authkey.ID > 0
+	return authkey.ID, true
 }
 
 func (a *AuthService) Auth(c *gin.Context) {
@@ -96,14 +102,13 @@ func (a *AuthService) Auth(c *gin.Context) {
 			ErrorCode:    "AuthFailed",
 			ErrorMessage: "API Key missed",
 		}
-		// map[string]string{"errorMessage": "apiKey missed"}
-
 		c.JSON(401, resp)
 		c.Abort()
 		return
 	}
 
-	if a.checkKey(key) {
+	if id, ok := a.checkKey(key); ok {
+		c.Set(KeyUser, id)
 		c.Next()
 	} else {
 		resp := ginshared.GeneralResp{
@@ -111,7 +116,6 @@ func (a *AuthService) Auth(c *gin.Context) {
 			ErrorCode:    "AuthFailed",
 			ErrorMessage: "apiKey mismatched or been deleted",
 		}
-		// map[string]string{"errorMessage": "apiKey mismatched or been deleted"}
 
 		c.JSON(http.StatusUnauthorized, resp)
 		c.Abort()

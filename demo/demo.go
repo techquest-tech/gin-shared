@@ -4,8 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/techquest-tech/gin-shared/pkg/auth"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
+	"github.com/techquest-tech/gin-shared/pkg/keycloak"
 )
 
 type DemoController struct {
@@ -31,7 +31,7 @@ func (d *DemoController) Admin(c *gin.Context) {
 }
 
 // NewDemoController must return ginshared.DiController --- Step 1
-func NewDemoController(router *gin.Engine, logger *zap.Logger, keycloak *auth.KeycloakConfig) ginshared.DiController {
+func NewDemoController(router *gin.Engine, logger *zap.Logger, keycloak *keycloak.KeycloakConfig) ginshared.DiController {
 
 	// var sbbEndpoint = ginkeycloak.KeycloakConfig{
 	// 	Url:   "https://sso.sit-k8s.esquel.cn/",
