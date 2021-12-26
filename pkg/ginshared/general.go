@@ -11,7 +11,6 @@ type GeneralResp struct {
 	Succ         bool
 	ErrorCode    string
 	ErrorMessage string
-	Data         interface{}
 }
 
 type ReportError struct {

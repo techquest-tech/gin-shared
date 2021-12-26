@@ -122,9 +122,19 @@ func (a *AuthService) Auth(c *gin.Context) {
 	}
 }
 
-type AuthGroutRoute gin.IRoutes
+type AuthedGroutRoute gin.IRoutes
 
-func NewRouterRequiredAuth(group *gin.RouterGroup, auth *AuthService) AuthGroutRoute {
+func NewDefaultAuthedRouter(route *gin.Engine, auth *AuthService) AuthedGroutRoute {
+	viper.SetDefault("baseUri", "/api/rfid")
+	uri := viper.GetString("baseUri")
+	return NewAuthedRouter(route, auth, uri)
+}
+
+func NewAuthedRouter(route *gin.Engine, auth *AuthService, base string) AuthedGroutRoute {
+	return route.Group(base).Use(auth.Auth)
+}
+
+func NewRouterRequiredAuth(group *gin.RouterGroup, auth *AuthService) AuthedGroutRoute {
 	result := group.Use(auth.Auth)
-	return AuthGroutRoute(result)
+	return AuthedGroutRoute(result)
 }
