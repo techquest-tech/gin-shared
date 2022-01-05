@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"go.uber.org/dig"
@@ -120,6 +121,20 @@ func (a *AuthService) Auth(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, resp)
 		c.Abort()
 	}
+}
+
+func (a *AuthService) CreateUser(owner, remark string) (string, error) {
+	u4 := uuid.New()
+	key := AuthKey{
+		ApiKey: u4.String(),
+		Owner:  owner,
+		Remark: remark,
+	}
+	err := a.Db.Save(key).Error
+	if err != nil {
+		return "", err
+	}
+	return key.ApiKey, nil
 }
 
 type AuthedGroutRoute gin.IRoutes
