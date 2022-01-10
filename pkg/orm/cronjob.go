@@ -37,7 +37,7 @@ func init() {
 			return nil, nil
 		}
 
-		for key, _ := range sub.AllSettings() {
+		for key := range sub.AllSettings() {
 			item := &DBCronJob{
 				logger:   logger.With(zap.String("job", key)),
 				db:       db,
