@@ -6,6 +6,7 @@ import (
 
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"github.com/techquest-tech/gin-shared/pkg/keycloak"
+	_ "github.com/techquest-tech/gin-shared/pkg/orm"
 )
 
 type DemoController struct {
