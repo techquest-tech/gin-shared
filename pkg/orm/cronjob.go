@@ -33,7 +33,7 @@ func init() {
 	ginshared.GetContainer().Provide(func(logger *zap.Logger, db *gorm.DB) (ginshared.DiController, error) {
 		sub := viper.Sub("cronjob")
 		if sub == nil {
-			logger.Info("not DB job is scheduled.")
+			logger.Debug("not DB job is scheduled.")
 			return nil, nil
 		}
 
@@ -45,7 +45,7 @@ func init() {
 				Schedule: sub.GetString(key + ".Schedule"),
 				Sql:      sub.GetString(key + ".Sql"),
 			}
-			if item.Schedule != "-" {
+			if item.Schedule != "-" && item.Sql != "" {
 				cr, err := schedule.CreateSchedule(item.Name, item.Schedule, item.FireJob, item.logger)
 				if err != nil {
 					item.logger.Error("start up schedule failed.", zap.Error(err))
