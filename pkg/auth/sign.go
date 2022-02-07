@@ -2,10 +2,7 @@ package auth
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"time"
@@ -20,17 +17,20 @@ func init() {
 	ginshared.GetContainer().Provide(func(logging *zap.Logger) (*SignService, error) {
 		ss := &SignService{
 			logger:       logging,
-			KeyTimestamp: "time_stamp",
+			KeyTimestamp: "timestamp",
 			KeySign:      "sign",
-			KeyApp:       "app_id",
+			KeyApp:       "app",
 			MaxDuration:  30 * time.Minute,
 		}
 		settings := viper.Sub("auth.sign")
+
 		if settings != nil {
 			settings.Unmarshal(&ss)
+			return ss, nil
+		} else {
+			logging.Debug("no settings for sign auth")
+			return nil, nil
 		}
-
-		return ss, nil
 	})
 }
 
@@ -62,18 +62,18 @@ func (ss *SignService) CheckMaxDuration(c *gin.Context) {
 		return
 	}
 
+	ss.logger.Info("check timestamp done", zap.Duration("duration", duration))
+
 	c.Next()
 
 }
 
 func (ss *SignService) Sign(c *gin.Context) {
 	buf := bytes.Buffer{}
-	buf.WriteString("timestamp=")
-	buf.WriteString(c.GetHeader(ss.KeyTimestamp))
-	buf.WriteString("&body=")
-	buf.Write(CloneRequestBody(c))
 
 	appID := c.GetHeader(ss.KeyApp)
+	buf.WriteString("app=")
+	buf.WriteString(appID)
 	secret, ok := ss.Secrets[appID]
 	if !ok {
 		ss.logger.Error("invalid appID", zap.String("reqID", appID))
@@ -83,8 +83,13 @@ func (ss *SignService) Sign(c *gin.Context) {
 	}
 	buf.WriteString("&secret=")
 	buf.WriteString(secret)
+	buf.WriteString("&timestamp=")
+	buf.WriteString(c.GetHeader(ss.KeyTimestamp))
 
-	signed := MD5(buf.Bytes())
+	buf.WriteString("&body=")
+	buf.Write(ginshared.CloneRequestBody(c))
+
+	signed := ginshared.MD5(buf.Bytes())
 
 	reqSigned := c.GetHeader(ss.KeySign)
 	if signed != reqSigned {
@@ -93,22 +98,7 @@ func (ss *SignService) Sign(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	ss.logger.Debug("signed check passed.")
+	ss.logger.Debug("signed check passed.", zap.String("signed", signed))
+
 	c.Next()
-}
-
-func MD5(raw []byte) string {
-	h := md5.New()
-	h.Write(raw)
-	signed := hex.EncodeToString(h.Sum(nil))
-	return signed
-}
-
-func CloneRequestBody(c *gin.Context) []byte {
-	buf := make([]byte, 0)
-	if c.Request.Body != nil {
-		buf, _ = ioutil.ReadAll(c.Request.Body)
-	}
-	c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(buf))
-	return buf
 }
