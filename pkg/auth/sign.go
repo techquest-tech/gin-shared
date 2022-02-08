@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"bytes"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -53,27 +52,34 @@ func (ss *SignService) CheckMaxDuration(c *gin.Context) {
 	}
 
 	mm, _ := strconv.ParseInt(reqTime, 10, 64)
-	duration := time.Since(time.UnixMilli(mm))
+	reqParsed := time.UnixMilli(mm)
+	duration := time.Since(reqParsed)
+	if duration < 0 {
+		duration = -1 * duration
+	}
 
 	if duration > ss.MaxDuration {
-		ss.logger.Warn("timestamp is out of max duration", zap.Duration("duration", duration))
+		ss.logger.Warn("timestamp is out of max duration", zap.Duration("duration", duration),
+			zap.Time("parsedValue", reqParsed),
+			zap.String("headerValue", reqTime))
 		c.JSON(http.StatusBadRequest, fmt.Sprintf("请求已超过最大允许值(%s), 实时差异 %s", ss.MaxDuration, duration))
 		c.Abort()
 		return
 	}
 
-	ss.logger.Info("check timestamp done", zap.Duration("duration", duration))
+	ss.logger.Debug("check timestamp done", zap.Duration("duration", duration))
 
 	c.Next()
 
 }
 
 func (ss *SignService) Sign(c *gin.Context) {
-	buf := bytes.Buffer{}
+	// buf := bytes.Buffer{}
 
 	appID := c.GetHeader(ss.KeyApp)
-	buf.WriteString("app=")
-	buf.WriteString(appID)
+	ts := c.GetHeader(ss.KeyTimestamp)
+	// buf.WriteString("app=")
+	// buf.WriteString(appID)
 	secret, ok := ss.Secrets[appID]
 	if !ok {
 		ss.logger.Error("invalid appID", zap.String("reqID", appID))
@@ -81,15 +87,21 @@ func (ss *SignService) Sign(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	buf.WriteString("&secret=")
-	buf.WriteString(secret)
-	buf.WriteString("&timestamp=")
-	buf.WriteString(c.GetHeader(ss.KeyTimestamp))
+	// buf.WriteString("&secret=")
+	// buf.WriteString(secret)
+	// buf.WriteString("&timestamp=")
+	// buf.WriteString(c.GetHeader(ss.KeyTimestamp))
 
-	buf.WriteString("&body=")
-	buf.Write(ginshared.CloneRequestBody(c))
+	// buf.WriteString("&body=")
+	// buf.Write(ginshared.CloneRequestBody(c))
 
-	signed := ginshared.MD5(buf.Bytes())
+	signed, err := SignRequest(appID, ts, secret, ginshared.CloneRequestBody(c))
+	if err != nil {
+		ss.logger.Error("signed failed", zap.Error(err))
+		c.JSON(http.StatusUnauthorized, "验证签名失败")
+		c.Abort()
+		return
+	}
 
 	reqSigned := c.GetHeader(ss.KeySign)
 	if signed != reqSigned {
