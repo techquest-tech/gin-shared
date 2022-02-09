@@ -16,32 +16,35 @@ keycloak:
 queries:
   items:
   - uri: /order/:id
-    preset:
-      code: B3
+    query:
+      preset:
+        code: B3
 
-    sql: |
-      SELECT uo.created_at as createdAt, ut.`type` ,ut.brand ,ut.company, utv.code , utv.`size` , utv.`type` , utv.mark_count as count
-      from ur_orders uo join ur_tags ut on uo.id =ut.order_id JOIN ur_tag_vos utv on ut.id = utv.tag_id   
-      where uo.id =? and utv.code = ? order by utv.code 
-    params:
-    - id
-    - code
+      sql: |
+        SELECT uo.created_at as createdAt, ut.`type` ,ut.brand ,ut.company, utv.code , utv.`size` , utv.`type` , utv.mark_count as count
+        from ur_orders uo join ur_tags ut on uo.id =ut.order_id JOIN ur_tag_vos utv on ut.id = utv.tag_id   
+        where uo.id =? and utv.code = ? order by utv.code 
+      params:
+      - id
+      - code
 
   - uri: /scan/:epc
-    sql: |
-      select bci .`style` , color ,`size` ,upc ,qr_code as qrCode
-      from belle_carton_items bci 
-      where bci .epc = ?
-    params:
-    - epc
+    query:
+      sql: |
+        select bci .`style` , color ,`size` ,upc ,qr_code as qrCode
+        from belle_carton_items bci 
+        where bci .epc = ?
+      params:
+      - epc
 
   - uri: /batchQuery
-    sql: |
-      select epc, bci .`style` , color ,`size` ,upc ,qr_code as qrCode
-      from belle_carton_items bci 
-      where bci .epc in(?)
-    params:
-    - epc
+    query:
+      sql: |
+        select epc, bci .`style` , color ,`size` ,upc ,qr_code as qrCode
+        from belle_carton_items bci 
+        where bci .epc in(?)
+      params:
+      - epc
 
 
 cors:

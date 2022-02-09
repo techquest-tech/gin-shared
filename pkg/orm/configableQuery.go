@@ -16,10 +16,34 @@ type RawQuerySerice struct {
 	logger      *zap.Logger
 	EnabledAuth bool
 	Base        string
-	Items       []RawQuery
+	Items       []SerivceItem
 }
+
+func (r *RawQuery) Query(db *gorm.DB, data map[string]interface{}) ([]map[string]interface{}, error) {
+	allParams := map[string]interface{}{}
+
+	for k, v := range r.Preset {
+		allParams[k] = v
+	}
+	for k, v := range data {
+		allParams[k] = v
+	}
+	params := make([]interface{}, 0)
+	for _, key := range r.Params {
+		params = append(params, allParams[key])
+	}
+	result := make([]map[string]interface{}, 0)
+	err := db.Raw(r.Sql, params...).Find(&result).Error
+
+	return result, err
+}
+
+type SerivceItem struct {
+	Uri   string
+	Query RawQuery
+}
+
 type RawQuery struct {
-	Uri    string
 	Sql    string
 	Preset map[string]interface{}
 	Params []string
@@ -56,7 +80,7 @@ func initRawQuery(db *gorm.DB, logger *zap.Logger, router *gin.Engine, authservi
 	}
 
 	for _, item := range serivce.Items {
-		group.GET(item.Uri, serivce.handler(item))
+		group.GET(item.Uri, serivce.handler(item.Query))
 	}
 
 	return nil
@@ -65,10 +89,6 @@ func initRawQuery(db *gorm.DB, logger *zap.Logger, router *gin.Engine, authservi
 func (service *RawQuerySerice) handler(item RawQuery) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		allParams := map[string]interface{}{}
-
-		for k, v := range item.Preset {
-			allParams[k] = v
-		}
 
 		for _, v := range c.Params {
 			allParams[v.Key] = v.Value
@@ -81,12 +101,7 @@ func (service *RawQuerySerice) handler(item RawQuery) gin.HandlerFunc {
 			}
 
 		}
-		params := make([]interface{}, 0)
-		for _, key := range item.Params {
-			params = append(params, allParams[key])
-		}
-		result := make([]map[string]interface{}, 0)
-		err := service.db.Raw(item.Sql, params...).Find(&result).Error
+		result, err := item.Query(service.db, allParams)
 
 		if err != nil {
 			panic(err)
