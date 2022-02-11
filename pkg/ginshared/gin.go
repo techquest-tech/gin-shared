@@ -22,8 +22,6 @@ const (
 
 var AppName = "app"
 
-var ControllerOptions = dig.Group("controllers")
-
 // var PreStarterOptions = dig.Group("PreStarter")
 
 func InitConfig() {
