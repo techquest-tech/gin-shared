@@ -140,12 +140,19 @@ func (a *AuthService) CreateUser(owner, remark string) (string, error) {
 type AuthedGroutRoute gin.IRoutes
 
 func NewDefaultAuthedRouter(route *gin.Engine, auth *AuthService, logger *zap.Logger) AuthedGroutRoute {
+	return NewURIAuthedRouter(route, auth, logger, "")
+}
+
+func NewURIAuthedRouter(route *gin.Engine, auth *AuthService, logger *zap.Logger, uri string) AuthedGroutRoute {
 	viper.SetDefault("baseUri", "/api/rfid")
 	viper.SetDefault("replyCode", 299)
 
-	uri := viper.GetString("baseUri")
+	fulluri := viper.GetString("baseUri")
+	if uri != "" {
+		fulluri = fulluri + "/" + uri
+	}
 	replyCode := viper.GetInt("replyCode")
-	return NewAuthedRouter(route, auth, logger, uri, replyCode)
+	return NewAuthedRouter(route, auth, logger, fulluri, replyCode)
 }
 
 func NewAuthedRouter(route *gin.Engine, auth *AuthService, logger *zap.Logger, base string, replyCode int) AuthedGroutRoute {
