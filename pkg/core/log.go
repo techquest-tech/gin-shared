@@ -1,4 +1,4 @@
-package ginshared
+package core
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 // 	return zap.NewExample()
 // }
 
-func initLogger() (*zap.Logger, error) {
+func InitLogger() (*zap.Logger, error) {
 
 	InitConfig()
 

@@ -1,13 +1,14 @@
 package ginshared
 
 import (
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/dig"
 )
 
-var container = dig.New()
+// var container = dig.New()
 
 func GetContainer() *dig.Container {
-	return container
+	return core.Container
 }
 
 type DiController interface{}
@@ -15,9 +16,9 @@ type DiController interface{}
 var ControllerOptions = dig.Group("controllers")
 
 func Provide(constructor interface{}, opts ...dig.ProvideOption) error {
-	return container.Provide(constructor, opts...)
+	return core.Container.Provide(constructor, opts...)
 }
 
 func ProvideController(constructor interface{}) error {
-	return container.Provide(constructor, ControllerOptions)
+	return core.Container.Provide(constructor, ControllerOptions)
 }
