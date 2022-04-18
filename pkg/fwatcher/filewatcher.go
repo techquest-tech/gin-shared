@@ -219,8 +219,10 @@ func (e *FilelWatcher) Walk() {
 		switch {
 		case strings.HasPrefix(info.Name(), "."):
 			e.Logger.Info("ignored hidden file.", zap.String("file", info.Name()))
-		case info.IsDir():
-			e.Logger.Debug("walk into sub folder", zap.String("sub folder", path))
+		case strings.HasPrefix(path, e.DoneFolder) || strings.HasPrefix(path, e.ErrorFolder):
+			e.Logger.Info("ignored done/error folder", zap.String("file", path))
+		// case info.IsDir():
+		// 	e.Logger.Debug("walk into sub folder", zap.String("sub folder", path))
 		default:
 			e.handleFile(path)
 		}
@@ -240,8 +242,8 @@ func (e *FilelWatcher) handleFile(file string) {
 			e.Logger.Error("process file failed on Idempotent", zap.Error(err))
 			return
 		}
-		if !result {
-			e.Logger.Info("file idempotent return false, file has been processed before.")
+		if result {
+			e.Logger.Info("file idempotent return true, file has been processed before.")
 			return
 		}
 	}
@@ -267,6 +269,7 @@ func (e *FilelWatcher) handleFile(file string) {
 		return
 	}
 	if e.DoneFolder != "" {
+		e.Logger.Debug("going to mv file to done folder", zap.String("file", file))
 		mv(file, e.DoneFolder, e.Logger)
 		return
 	}
@@ -301,7 +304,7 @@ func NewWatchExcelFolder(p FileWatcherParams) ginshared.DiController {
 	}
 
 	// settings.SetDefault(KeyExcelFolder, ExcelFolder)
-	settings.SetDefault("retryDelay", 100*time.Microsecond)
+	settings.SetDefault("retryDelay", 5*time.Second)
 	settings.SetDefault("retryAttempts", uint(30))
 
 	// settings.SetDefault("doneFolder", "done")
@@ -316,14 +319,20 @@ func NewWatchExcelFolder(p FileWatcherParams) ginshared.DiController {
 		filewatcher.Excluded = []string{"~*", ".*"}
 	}
 
+	if filewatcher.Path != "" {
+		os.MkdirAll(filewatcher.Path, 0755)
+		filewatcher.Logger.Info("created folder", zap.String("watched folder", filewatcher.Path))
+	}
 	//init folder for done or error
 	if filewatcher.DoneFolder != "" {
 		// folder := filepath.Join(filewatcher.Path, filewatcher.DoneFolder)
 		os.MkdirAll(filewatcher.DoneFolder, 0755)
+		filewatcher.Logger.Info("created done folder", zap.String("done folder", filewatcher.DoneFolder))
 	}
 	if filewatcher.ErrorFolder != "" {
 		// folder := filepath.Join(filewatcher.Path, filewatcher.ErrorFolder)
 		os.MkdirAll(filewatcher.ErrorFolder, 0755)
+		filewatcher.Logger.Info("created error folder", zap.String("error folder", filewatcher.ErrorFolder))
 	}
 
 	//init retry
@@ -336,6 +345,9 @@ func NewWatchExcelFolder(p FileWatcherParams) ginshared.DiController {
 
 	if !filewatcher.Delete && filewatcher.DoneFolder == "" {
 		filewatcher.Idempotent = p.Idempotent
+		filewatcher.Logger.Info("delete is false and done folder is empty. use Idempotent", zap.Any("Idempotent", p.Idempotent))
+	} else {
+		filewatcher.Logger.Debug("No Idempotent is needed.", zap.Bool("deleted", filewatcher.Delete), zap.String("donw folder", filewatcher.DoneFolder))
 	}
 
 	filewatcher.StartService(p.Ctx)

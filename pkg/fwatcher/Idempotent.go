@@ -36,6 +36,8 @@ func init() {
 			db.AutoMigrate(&FileIdempotent{})
 		}
 
+		logger.Info("IdempotentService inited.")
+
 		return &service
 	})
 }
