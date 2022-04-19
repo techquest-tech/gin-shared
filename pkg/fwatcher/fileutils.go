@@ -36,7 +36,7 @@ func mv(file, targetFolder string, logger *zap.Logger) {
 	if err != nil {
 		logger.Error("mv file error", zap.Error(err))
 		if !errors.Is(err, os.ErrNotExist) {
-			logger.Error("mv to done folder failed.", zap.Any("error", err))
+			logger.Error("mv to folder failed.", zap.Any("error", err), zap.String("target", nFileName))
 		}
 
 		return

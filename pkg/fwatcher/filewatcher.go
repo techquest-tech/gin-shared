@@ -54,6 +54,16 @@ type FilelWatcher struct {
 	Idempotent    *FileIdempotentService
 }
 
+func (e *FilelWatcher) isDoneOrErrFolder(filename string) bool {
+	if e.DoneFolder != "" && strings.HasPrefix(filename, e.DoneFolder) {
+		return true
+	}
+	if e.ErrorFolder != "" && strings.HasPrefix(filename, e.ErrorFolder) {
+		return true
+	}
+	return false
+}
+
 // type FileAction func(file string) error
 
 func (e *FilelWatcher) StartService(ctx context.Context) {
@@ -99,7 +109,7 @@ func (e *FilelWatcher) StartWatcher(ctx context.Context) error {
 	// defer watcher.Close()
 
 	go func() {
-
+		defer e.Logger.Info("stop watch files")
 	watchloop:
 		for {
 			select {
@@ -110,41 +120,55 @@ func (e *FilelWatcher) StartWatcher(ctx context.Context) error {
 				break watchloop
 
 			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
 				e.Logger.Error("watcher file error, ", zap.Any("error", err))
+				if !ok {
+					continue
+				}
 
 			case event, ok := <-watcher.Events:
 				if !ok {
-					return
+					continue
 				}
 				e.Logger.Debug("received event:", zap.Any("event", event))
 
 				fullfilename := event.Name
 
-				stat, err := os.Stat(fullfilename)
-				if err != nil {
-					e.Logger.Warn("stat file return error",
-						zap.String("file", fullfilename),
-						zap.Any("error", err),
-					)
-				}
-
 				switch {
-				case stat.IsDir() && event.Op&fsnotify.Create == fsnotify.Create && e.Recursive:
-					watcher.Add(fullfilename)
-					e.Logger.Info("monitor new created folder", zap.String("folder", fullfilename))
-				case event.Op&fsnotify.Create == fsnotify.Create,
-					event.Op&fsnotify.Write == fsnotify.Write,
+				case e.isDoneOrErrFolder(fullfilename):
+					e.Logger.Debug("ignored done or error folder")
+					continue
+
+				case event.Op&fsnotify.Create == fsnotify.Create:
+					stat, err := os.Stat(fullfilename)
+					if err != nil {
+						e.Logger.Warn("stat file return error",
+							zap.String("file", fullfilename),
+							zap.Any("error", err),
+						)
+						continue
+					}
+					if stat.IsDir() {
+						if e.Recursive {
+							watcher.Add(fullfilename)
+							e.Logger.Info("monitor new created folder", zap.String("folder", fullfilename))
+						} else {
+							e.Logger.Debug("ignored, recursive is disabled.")
+						}
+					} else {
+						// it's file & should processing it.
+						e.handleFile(fullfilename)
+					}
+
+				case event.Op&fsnotify.Write == fsnotify.Write,
 					event.Op&fsnotify.Chmod == fsnotify.Chmod:
 
 					e.handleFile(fullfilename)
 				default:
-					e.Logger.Info("ignored event.", zap.Any("event", event))
+					e.Logger.Debug("ignored event.", zap.Any("event", event))
 				}
 			}
 		}
+
 	}()
 
 	err = watcher.Add(e.Path)
@@ -155,9 +179,13 @@ func (e *FilelWatcher) StartWatcher(ctx context.Context) error {
 			zap.String("folder", e.Path),
 			zap.Any("error", err),
 		)
+		return err
 	}
 	if e.Recursive {
 		filepath.Walk(e.Path, func(path string, info fs.FileInfo, err error) error {
+			if e.isDoneOrErrFolder(path) {
+				return filepath.SkipDir
+			}
 			if info.IsDir() {
 				err := watcher.Add(path)
 				if err != nil {
@@ -181,6 +209,11 @@ func (e *FilelWatcher) Filter(file string) bool {
 	filename := strings.ToLower(filepath.Base(file))
 	logger := e.Logger.With(zap.String("file", filename))
 
+	if e.isDoneOrErrFolder(filename) {
+		logger.Debug("it's under done or error folder, file ignored.")
+		return false
+	}
+
 	matched := (len(e.Included) == 0)
 	// if len(e.Included) > 0 {
 	for _, item := range e.Included {
@@ -192,7 +225,7 @@ func (e *FilelWatcher) Filter(file string) bool {
 		}
 	}
 	if !matched {
-		logger.Info("file is not included")
+		logger.Debug("file is not included")
 		return false
 	}
 
@@ -204,25 +237,29 @@ func (e *FilelWatcher) Filter(file string) bool {
 			return false
 		}
 	}
+	logger.Debug("filed filered and it's included.")
 	return true
 }
 
 func (e *FilelWatcher) Walk() {
 	filepath.Walk(e.Path, func(path string, info fs.FileInfo, err error) error {
-		if !e.Recursive {
-			depth := strings.Count(path, "/") - strings.Count(e.Path, "/")
-			if depth > 2 {
-				e.Logger.Info("recursive disabled. ignore all sub folders")
-				return filepath.SkipDir
-			}
-		}
 		switch {
 		case strings.HasPrefix(info.Name(), "."):
-			e.Logger.Info("ignored hidden file.", zap.String("file", info.Name()))
-		case strings.HasPrefix(path, e.DoneFolder) || strings.HasPrefix(path, e.ErrorFolder):
-			e.Logger.Info("ignored done/error folder", zap.String("file", path))
-		// case info.IsDir():
-		// 	e.Logger.Debug("walk into sub folder", zap.String("sub folder", path))
+			e.Logger.Debug("ignored hidden file.", zap.String("file", info.Name()))
+		case e.isDoneOrErrFolder(path):
+			e.Logger.Debug("ignored done/error folder", zap.String("file", path))
+			return filepath.SkipDir
+		case info.IsDir():
+			switch {
+			case path == e.Path:
+				e.Logger.Debug("walk from root")
+			case e.Recursive:
+				e.Logger.Debug("walk into sub folder", zap.String("sub folder", path))
+			default:
+				e.Logger.Debug("recursive disabled. ignore all sub folders", zap.String("sub folder", path))
+				return filepath.SkipDir
+			}
+
 		default:
 			e.handleFile(path)
 		}
@@ -321,18 +358,18 @@ func NewWatchExcelFolder(p FileWatcherParams) ginshared.DiController {
 
 	if filewatcher.Path != "" {
 		os.MkdirAll(filewatcher.Path, 0755)
-		filewatcher.Logger.Info("created folder", zap.String("watched folder", filewatcher.Path))
+		filewatcher.Logger.Info("touch folder", zap.String("watched folder", filewatcher.Path))
 	}
 	//init folder for done or error
 	if filewatcher.DoneFolder != "" {
 		// folder := filepath.Join(filewatcher.Path, filewatcher.DoneFolder)
 		os.MkdirAll(filewatcher.DoneFolder, 0755)
-		filewatcher.Logger.Info("created done folder", zap.String("done folder", filewatcher.DoneFolder))
+		filewatcher.Logger.Info("touch done folder", zap.String("done folder", filewatcher.DoneFolder))
 	}
 	if filewatcher.ErrorFolder != "" {
 		// folder := filepath.Join(filewatcher.Path, filewatcher.ErrorFolder)
 		os.MkdirAll(filewatcher.ErrorFolder, 0755)
-		filewatcher.Logger.Info("created error folder", zap.String("error folder", filewatcher.ErrorFolder))
+		filewatcher.Logger.Info("touch error folder", zap.String("error folder", filewatcher.ErrorFolder))
 	}
 
 	//init retry
