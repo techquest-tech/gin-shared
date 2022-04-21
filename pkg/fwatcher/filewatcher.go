@@ -27,7 +27,7 @@ const (
 	// ExcelFolder    = "data/excel"
 )
 
-var ErrorOpenFileFailed = errors.New("failed to open file")
+var ErrorShouldRetry = errors.New("process failed but should retry")
 
 var mu sync.RWMutex
 
@@ -51,6 +51,7 @@ type FilelWatcher struct {
 	Delete        bool
 	DoneFolder    string
 	ErrorFolder   string
+	ShouldRetry   retry.RetryIfFunc
 	Idempotent    *FileIdempotentService
 }
 
@@ -341,7 +342,7 @@ func NewWatchExcelFolder(p FileWatcherParams) ginshared.DiController {
 	}
 
 	// settings.SetDefault(KeyExcelFolder, ExcelFolder)
-	settings.SetDefault("retryDelay", 5*time.Second)
+	settings.SetDefault("retryDelay", 100*time.Millisecond)
 	settings.SetDefault("retryAttempts", uint(30))
 
 	// settings.SetDefault("doneFolder", "done")
@@ -376,9 +377,14 @@ func NewWatchExcelFolder(p FileWatcherParams) ginshared.DiController {
 	retry.DefaultAttempts = filewatcher.RetryAttempts
 	retry.DefaultDelay = filewatcher.RetryDelay
 
-	retry.DefaultRetryIf = func(err error) bool {
-		return err == ErrorOpenFileFailed
+	if filewatcher.ShouldRetry == nil {
+		filewatcher.ShouldRetry = func(err error) bool {
+			return errors.Is(err, ErrorShouldRetry) || errors.Is(err, &fs.PathError{})
+			// return err == ErrorShouldRetry
+		}
 	}
+
+	retry.DefaultRetryIf = filewatcher.ShouldRetry
 
 	if !filewatcher.Delete && filewatcher.DoneFolder == "" {
 		filewatcher.Idempotent = p.Idempotent

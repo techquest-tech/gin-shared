@@ -26,8 +26,10 @@ func mv(file, targetFolder string, logger *zap.Logger) {
 	nFileName := filepath.Join(targetFolder, filename)
 
 	if FileExisted(nFileName) {
+		ext := filepath.Ext(file)
 		timestamp := time.Now().Format("20060102T150405")
-		nFileName = filepath.Join(targetFolder, fmt.Sprintf("%s-%s", timestamp, filename))
+		filename = filename[:len(filename)-len(ext)]
+		nFileName = filepath.Join(targetFolder, fmt.Sprintf("%s-%s%s", filename, timestamp, ext))
 	}
 
 	logger.Debug("mv file", zap.String("src", file), zap.String("target", nFileName))
