@@ -29,7 +29,8 @@ const (
 
 var ErrorShouldRetry = errors.New("process failed but should retry")
 
-var mu sync.RWMutex
+// var mu sync.RWMutex
+var cache sync.Map
 
 var FileWatcheSettingKey = "files"
 
@@ -269,6 +270,16 @@ func (e *FilelWatcher) Walk() {
 }
 
 func (e *FilelWatcher) handleFile(file string) {
+	log := e.Logger.With(zap.String("file", file))
+
+	if _, ok := cache.Load(file); ok {
+		log.Info("file is processing.")
+		return
+	}
+
+	cache.Store(file, true)
+	defer cache.Delete(file)
+
 	if !e.Filter(file) {
 		e.Logger.Info("file is not included.", zap.String("file", file))
 		return
@@ -286,8 +297,8 @@ func (e *FilelWatcher) handleFile(file string) {
 		}
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
+	// mu.Lock()
+	// defer mu.Unlock()
 
 	//check file before process
 	if !FileExisted(file) {
