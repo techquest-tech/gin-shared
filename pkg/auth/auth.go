@@ -64,7 +64,7 @@ func (a *AuthService) checkKey(key string) (uint, bool) {
 
 	for _, k := range a.Keys {
 		if k == key {
-			a.logger.Info("use build-in key")
+			a.logger.Debug("use build-in key")
 			return 0, true
 		}
 	}
@@ -81,6 +81,7 @@ func (a *AuthService) checkKey(key string) (uint, bool) {
 		a.logger.Error("sql query error", zap.Any("error", err))
 		return 0, false
 	}
+	a.logger.Debug("found in DB", zap.Uint("userID", authkey.ID))
 
 	return authkey.ID, true
 }
