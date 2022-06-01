@@ -13,6 +13,7 @@ import (
 
 type FullRequestDetails struct {
 	gorm.Model
+	Uri    string
 	Body   string
 	Status int
 }
@@ -45,16 +46,18 @@ func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 		data, _ = ioutil.ReadAll(c.Request.Body)
 		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(data))
 	}
+	uri := c.Request.RequestURI
 
 	c.Next()
 	status := c.Writer.Status()
-	go tr.doLogRequestBody(data, status)
+	go tr.doLogRequestBody(data, uri, status)
 }
 
-func (tr *TracingRequestService) doLogRequestBody(data []byte, status int) {
+func (tr *TracingRequestService) doLogRequestBody(data []byte, uri string, status int) {
 	req := FullRequestDetails{
 		Body:   string(data),
 		Status: status,
+		Uri:    uri,
 	}
 	err := tr.DB.Save(&req).Error
 	if err != nil {
