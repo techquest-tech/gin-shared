@@ -24,7 +24,7 @@ func CreateSchedule(jobname, schedule string, cmd func(), logger *zap.Logger) (*
 	l := &CronZaplog{
 		logger: logger,
 	}
-	cr := cron.New(cron.WithChain(cron.SkipIfStillRunning(l)))
+	cr := cron.New(cron.WithChain(cron.Recover(l), cron.SkipIfStillRunning(l)))
 	_, err := cr.AddFunc(schedule, cmd)
 	if err != nil {
 		return nil, err
