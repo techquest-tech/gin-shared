@@ -1,15 +1,8 @@
 package core
 
 import (
-	"fmt"
-	"log"
-	"os"
-	"strings"
-
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // func defaultLoggerSettings() *zap.Logger {
@@ -32,22 +25,23 @@ func InitLogger() (*zap.Logger, error) {
 	level := zap.NewAtomicLevel()
 	level.UnmarshalText([]byte(settings.GetString("level")))
 
-	env := strings.ToLower(os.Getenv("ENV"))
+	// env := strings.ToLower(os.Getenv("ENV"))
 
-	if env == "" {
-		env = settings.GetString("env")
-	}
+	// if env == "" {
+	// 	env = settings.GetString("env")
+	// }
 
-	var config zap.Config
+	config := zap.NewDevelopmentConfig()
 
-	switch env {
-	case "prod", "prd", "uat":
-		config = zap.NewProductionConfig()
+	// switch env {
+	// case "prod", "prd", "uat":
+	// config = zap.NewProductionConfig()
 
-	default:
-		config = zap.NewDevelopmentConfig()
-	}
+	// default:
+	// 	config = zap.NewDevelopmentConfig()
+	// }
 
+	config.OutputPaths = []string{"stdout"}
 	config.Level.SetLevel(level.Level())
 
 	if !settings.GetBool("trace") {
@@ -55,29 +49,29 @@ func InitLogger() (*zap.Logger, error) {
 	}
 
 	//check if rotate enabled.
-	if settings.GetBool("rotate") {
+	// if settings.GetBool("rotate") {
 
-		settings.SetDefault("max", 32)
-		settings.SetDefault("backup", 30)
-		settings.SetDefault("age", 30)
-		settings.SetDefault("file", fmt.Sprintf("data/logs/%s.log", AppName))
+	// 	settings.SetDefault("max", 32)
+	// 	settings.SetDefault("backup", 30)
+	// 	settings.SetDefault("age", 30)
+	// 	settings.SetDefault("file", fmt.Sprintf("data/logs/%s.log", AppName))
 
-		rotateConfig := lumberjack.Logger{
-			Filename:   settings.GetString("file"),
-			MaxSize:    settings.GetInt("max"),
-			MaxBackups: settings.GetInt("backup"),
-			MaxAge:     settings.GetInt("age"),
-			Compress:   true,
-		}
+	// 	rotateConfig := lumberjack.Logger{
+	// 		Filename:   settings.GetString("file"),
+	// 		MaxSize:    settings.GetInt("max"),
+	// 		MaxBackups: settings.GetInt("backup"),
+	// 		MaxAge:     settings.GetInt("age"),
+	// 		Compress:   true,
+	// 	}
 
-		rotate := func(e zapcore.Entry) error {
-			rotateConfig.Write([]byte(fmt.Sprintf("%+v\n", e)))
-			return nil
-		}
+	// 	rotate := func(e zapcore.Entry) error {
+	// 		rotateConfig.Write([]byte(fmt.Sprintf("%+v\n", e)))
+	// 		return nil
+	// 	}
 
-		log.Print("rotate is enabled, to file " + rotateConfig.Filename)
+	// 	log.Print("rotate is enabled, to file " + rotateConfig.Filename)
 
-		return config.Build(zap.Hooks(rotate))
-	}
+	// 	return config.Build(zap.Hooks(rotate))
+	// }
 	return config.Build()
 }
