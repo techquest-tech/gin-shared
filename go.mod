@@ -1,6 +1,6 @@
 module github.com/techquest-tech/gin-shared
 
-go 1.17
+go 1.18
 
 require (
 	github.com/Depado/ginprom v1.7.4
@@ -84,5 +84,4 @@ require (
 	gopkg.in/ini.v1 v1.66.3 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	github.com/jordan-wright/email v4.0.1-0.20210109023952-943e75fe5223+incompatible
 )
