@@ -4,9 +4,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	_ "github.com/techquest-tech/gin-shared/pkg/cors"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"github.com/techquest-tech/gin-shared/pkg/keycloak"
 	_ "github.com/techquest-tech/gin-shared/pkg/orm"
+	_ "github.com/techquest-tech/gin-shared/pkg/prom"
 )
 
 type DemoController struct {

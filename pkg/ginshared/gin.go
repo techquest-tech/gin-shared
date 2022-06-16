@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/Depado/ginprom"
 	"github.com/gin-contrib/cors"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
@@ -29,15 +28,15 @@ func initEngine(logger *zap.Logger) *gin.Engine {
 	router.Use(ginzap.RecoveryWithZap(logger, true))
 	logger.Info("router engine inited.")
 
-	if viper.GetBool("prometheus.enabled") {
-		p := ginprom.New(
-			ginprom.Engine(router),
-			ginprom.Subsystem("gin"),
-			ginprom.Path("/metrics"),
-		)
-		router.Use(p.Instrument())
-		logger.Info("prometheus module enabled.")
-	}
+	// if viper.GetBool("prometheus.enabled") {
+	// 	p := ginprom.New(
+	// 		ginprom.Engine(router),
+	// 		ginprom.Subsystem("gin"),
+	// 		ginprom.Path("/metrics"),
+	// 	)
+	// 	router.Use(p.Instrument())
+	// 	logger.Info("prometheus module enabled.")
+	// }
 
 	//check CORS settings
 	corsSettings := viper.Sub("CORS")
