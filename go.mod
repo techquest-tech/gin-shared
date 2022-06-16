@@ -5,8 +5,6 @@ go 1.18
 require (
 	github.com/Depado/ginprom v1.7.4
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
-	github.com/avast/retry-go v3.0.0+incompatible
-	github.com/fsnotify/fsnotify v1.5.4
 	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.8.1
@@ -31,6 +29,7 @@ require (
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
+	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.19.6 // indirect
