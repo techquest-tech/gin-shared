@@ -13,9 +13,10 @@ import (
 
 type FullRequestDetails struct {
 	gorm.Model
-	Uri    string
-	Body   string
-	Status int
+	Uri      string
+	Body     string
+	Status   int
+	TargetID uint
 }
 
 type TracingRequestService struct {
@@ -50,19 +51,21 @@ func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 
 	c.Next()
 	status := c.Writer.Status()
-	go tr.doLogRequestBody(data, uri, status)
+	rawID := c.GetUint(KeyTracingID)
+	go tr.doLogRequestBody(data, uri, status, rawID)
 }
 
-func (tr *TracingRequestService) doLogRequestBody(data []byte, uri string, status int) {
+func (tr *TracingRequestService) doLogRequestBody(data []byte, uri string, status int, targetID uint) {
 	req := FullRequestDetails{
-		Body:   string(data),
-		Status: status,
-		Uri:    uri,
+		Body:     string(data),
+		Status:   status,
+		Uri:      uri,
+		TargetID: targetID,
 	}
 	err := tr.DB.Save(&req).Error
 	if err != nil {
 		tr.Logger.Error("save reqest failed", zap.Error(err))
 		return
 	}
-	tr.Logger.Info("save request details done.")
+	tr.Logger.Info("save request details done.", zap.Uint("targetID", targetID))
 }
