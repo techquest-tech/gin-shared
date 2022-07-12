@@ -1,6 +1,7 @@
 package orm
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -20,8 +21,9 @@ type RawQuerySerice struct {
 }
 
 type SerivceItem struct {
-	Uri   string
-	Query RawQuery
+	Uri     string
+	Query   RawQuery
+	Details *RawQuery
 }
 
 func init() {
@@ -55,27 +57,72 @@ func initRawQuery(db *gorm.DB, logger *zap.Logger, router *gin.Engine, authservi
 	}
 
 	for _, item := range serivce.Items {
-		group.GET(item.Uri, serivce.handler(item.Query))
+		if item.Details == nil {
+			group.GET(item.Uri, serivce.handler(item.Query))
+		} else {
+			group.GET(item.Uri, serivce.handleDetails(item.Query, *item.Details))
+		}
+
 	}
 
 	return nil
 }
 
+func readParams(c *gin.Context) map[string]interface{} {
+	allParams := map[string]interface{}{}
+
+	for _, v := range c.Params {
+		allParams[v.Key] = v.Value
+	}
+	for k, v := range c.Request.URL.Query() {
+		if len(v) == 1 {
+			allParams[k] = v[0]
+		} else {
+			allParams[k] = v
+		}
+
+	}
+	return allParams
+}
+
+func (service *RawQuerySerice) handleDetails(header, details RawQuery) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		p := readParams(c)
+		result := make(map[string]interface{})
+		r, err := header.Query(service.db, p)
+		if err != nil {
+			service.logger.Error("read header information failed.", zap.Error(err), zap.String("sql", header.Sql))
+			panic(err)
+		}
+		switch len(r) {
+		case 1:
+			result = r[0]
+			for k, v := range r[0] {
+				p[k] = v
+			}
+		case 0:
+			service.logger.Warn("read header failed, no records found", zap.String("sql", header.Sql))
+			c.JSON(404, "no records found")
+			return
+		default:
+			service.logger.Warn("read header failed, multi records found.", zap.String("sql", header.Sql), zap.Int("len", len(r)))
+			panic(fmt.Errorf("multi-recourds found"))
+		}
+
+		//read details
+		sub, err := details.Query(service.db, p)
+		if err != nil {
+			service.logger.Error("read detail records failed.", zap.Error(err), zap.String("sql", details.Sql))
+			panic(err)
+		}
+		result["details"] = sub
+		c.JSON(http.StatusOK, result)
+	}
+}
+
 func (service *RawQuerySerice) handler(item RawQuery) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		allParams := map[string]interface{}{}
-
-		for _, v := range c.Params {
-			allParams[v.Key] = v.Value
-		}
-		for k, v := range c.Request.URL.Query() {
-			if len(v) == 1 {
-				allParams[k] = v[0]
-			} else {
-				allParams[k] = v
-			}
-
-		}
+		allParams := readParams(c)
 		result, err := item.Query(service.db, allParams)
 
 		if err != nil {
