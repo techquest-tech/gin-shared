@@ -29,6 +29,9 @@ func InitDefaultDB(logger *zap.Logger) *gorm.DB {
 
 func InitDB(sub string, logger *zap.Logger) *gorm.DB {
 	dbSettings := viper.Sub(sub)
+	if dbSettings == nil {
+		return nil
+	}
 
 	dbSettings.SetDefault("type", "mysql")
 
