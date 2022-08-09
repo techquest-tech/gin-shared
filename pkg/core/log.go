@@ -73,5 +73,13 @@ func InitLogger() (*zap.Logger, error) {
 
 	// 	return config.Build(zap.Hooks(rotate))
 	// }
-	return config.Build()
+	l, err := config.Build()
+	if err != nil {
+		return nil, err
+	}
+
+	l.Debug("init logger done, and replace globals.")
+	zap.ReplaceGlobals(l)
+
+	return l, nil
 }
