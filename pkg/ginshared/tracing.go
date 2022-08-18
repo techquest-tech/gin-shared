@@ -1,4 +1,4 @@
-package tracing
+package ginshared
 
 import (
 	"bytes"
@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/event"
-	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"go.uber.org/zap"
 )
 
@@ -49,7 +48,7 @@ type TracingRequestService struct {
 }
 
 func init() {
-	ginshared.Provide(func(bus EventBus.Bus, logger *zap.Logger) event.EventComponent {
+	Provide(func(bus EventBus.Bus, logger *zap.Logger) event.EventComponent {
 		sr := &TracingRequestService{
 			Bus: bus,
 			Log: logger,
@@ -59,18 +58,18 @@ func init() {
 		if settings != nil {
 			settings.Unmarshal(sr)
 		}
-		if sr.Enabled {
-			bus.Subscribe(event.EventInit, sr.Enable)
-			logger.Info("tracing is enabled.")
-		}
+		// if sr.Enabled {
+		// 	bus.Subscribe(event.EventInit, sr.Enable)
+		// 	logger.Info("tracing is enabled.")
+		// }
 		return sr
 	}, event.EventOptions)
 }
 
-func (tr *TracingRequestService) Enable(route *gin.Engine) {
-	route.Use(tr.LogfullRequestDetails)
-	tr.Log.Info("received init event.")
-}
+// func (tr *TracingRequestService) Enable(route *gin.Engine) {
+// 	route.Use(tr.LogfullRequestDetails)
+// 	tr.Log.Info("received init event.")
+// }
 
 func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 	start := time.Now()

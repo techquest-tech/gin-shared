@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/event"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
-	"github.com/techquest-tech/gin-shared/pkg/tracing"
 	"go.uber.org/zap"
 )
 
@@ -52,7 +51,7 @@ func (appins *ApplicationInsightsClient) ReportError(err error) {
 	appins.logger.Debug("tracing error done", zap.Error(err))
 }
 
-func (appins *ApplicationInsightsClient) ReportTracing(tr *tracing.TracingDetails) {
+func (appins *ApplicationInsightsClient) ReportTracing(tr *ginshared.TracingDetails) {
 	client := appinsights.NewTelemetryClient(appins.Key)
 	t := appinsights.NewRequestTelemetry(
 		tr.Method, tr.Uri, tr.Durtion, fmt.Sprintf("%d", tr.Status),

@@ -8,7 +8,7 @@ import (
 )
 
 func NewConsoleTracing(bus EventBus.Bus, log *zap.Logger) ginshared.DiController {
-	bus.SubscribeAsync(event.EventTracing, func(tracing *TracingDetails) {
+	bus.SubscribeAsync(event.EventTracing, func(tracing *ginshared.TracingDetails) {
 		log.Info("tracing", zap.Any("details", tracing))
 	}, false)
 	return nil

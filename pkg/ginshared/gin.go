@@ -23,10 +23,11 @@ const (
 
 // var PreStarterOptions = dig.Group("PreStarter")
 
-func initEngine(logger *zap.Logger, bus EventBus.Bus) *gin.Engine {
+func initEngine(logger *zap.Logger, bus EventBus.Bus, tr *TracingRequestService) *gin.Engine {
 
 	router := gin.New()
 	router.Use(ginzap.Ginzap(logger, time.RFC3339, false))
+	router.Use(tr.LogfullRequestDetails)
 	router.Use(ginzap.RecoveryWithZap(logger, true))
 
 	bus.Publish(event.EventInit, router)

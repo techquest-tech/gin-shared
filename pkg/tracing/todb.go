@@ -12,7 +12,7 @@ import (
 
 type FullRequestDetails struct {
 	gorm.Model
-	TracingDetails
+	ginshared.TracingDetails
 }
 
 type TracingRequestServiceDBImpl struct {
@@ -26,7 +26,7 @@ func NewTracingRequestService(db *gorm.DB, logger *zap.Logger) (*TracingRequestS
 		Logger: logger,
 	}
 	if viper.GetBool(orm.KeyInitDB) {
-		err := db.AutoMigrate(&TracingDetails{})
+		err := db.AutoMigrate(&ginshared.TracingDetails{})
 		if err != nil {
 			logger.Error("create fullRequestDetals failed.", zap.Error(err))
 		} else {
@@ -41,7 +41,7 @@ func SubEventToDB(tr *TracingRequestServiceDBImpl, bus EventBus.Bus) ginshared.D
 	return nil
 }
 
-func (tr *TracingRequestServiceDBImpl) doLogRequestBody(req *TracingDetails) {
+func (tr *TracingRequestServiceDBImpl) doLogRequestBody(req *ginshared.TracingDetails) {
 	model := FullRequestDetails{
 		TracingDetails: *req,
 	}
