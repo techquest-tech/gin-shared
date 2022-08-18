@@ -3,7 +3,6 @@ package azure
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/asaskevich/EventBus"
 	"github.com/microsoft/ApplicationInsights-Go/appinsights"
@@ -56,7 +55,7 @@ func (appins *ApplicationInsightsClient) ReportTracing(tr *ginshared.TracingDeta
 	t := appinsights.NewRequestTelemetry(
 		tr.Method, tr.Uri, tr.Durtion, fmt.Sprintf("%d", tr.Status),
 	)
-	t.Timestamp = time.Now()
+
 	client.Track(t)
 	appins.logger.Debug("submit tracing done.")
 }

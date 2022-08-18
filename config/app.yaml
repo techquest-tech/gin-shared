@@ -1,6 +1,12 @@
 address: 127.0.0.1:5000
 baseUri: /api/ur
 
+tracing:
+  enabled: true
+  request: true
+  resp: true
+  azure:
+    key: 2dc68248-e2e9-445c-9661-0bfdbac1da6d
 
 auth:
   keys:

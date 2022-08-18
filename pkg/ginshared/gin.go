@@ -82,7 +82,6 @@ type Params struct {
 	Logger      *zap.Logger
 	Router      *gin.Engine
 	Bus         EventBus.Bus
-	Events      event.EventInited
 	Controllers []DiController `group:"controllers"`
 }
 

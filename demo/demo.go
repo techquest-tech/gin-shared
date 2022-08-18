@@ -8,7 +8,6 @@ import (
 	"github.com/techquest-tech/gin-shared/pkg/keycloak"
 	_ "github.com/techquest-tech/gin-shared/pkg/orm"
 	_ "github.com/techquest-tech/gin-shared/pkg/prom"
-	_ "github.com/techquest-tech/gin-shared/pkg/tracing"
 	_ "github.com/techquest-tech/gin-shared/pkg/tracing/azure"
 )
 

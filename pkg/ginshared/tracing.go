@@ -48,7 +48,7 @@ type TracingRequestService struct {
 }
 
 func init() {
-	Provide(func(bus EventBus.Bus, logger *zap.Logger) event.EventComponent {
+	Provide(func(bus EventBus.Bus, logger *zap.Logger) *TracingRequestService {
 		sr := &TracingRequestService{
 			Bus: bus,
 			Log: logger,
@@ -58,18 +58,19 @@ func init() {
 		if settings != nil {
 			settings.Unmarshal(sr)
 		}
-		// if sr.Enabled {
-		// 	bus.Subscribe(event.EventInit, sr.Enable)
-		// 	logger.Info("tracing is enabled.")
-		// }
+
+		if sr.Request || sr.Resp {
+			bus.SubscribeAsync(event.EventTracing, sr.LogBody, false)
+		}
 		return sr
-	}, event.EventOptions)
+	})
 }
 
-// func (tr *TracingRequestService) Enable(route *gin.Engine) {
-// 	route.Use(tr.LogfullRequestDetails)
-// 	tr.Log.Info("received init event.")
-// }
+func (tr *TracingRequestService) LogBody(req *TracingDetails) {
+	log := tr.Log.With(zap.String("method", req.Method), zap.String("uri", req.Uri))
+	log.Info("req", zap.String("req body", req.Body))
+	log.Info("resp", zap.Int("status code", req.Status), zap.String("resp", req.Resp))
+}
 
 func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 	start := time.Now()
@@ -82,13 +83,14 @@ func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 		}
 	}
 
-	respcache := make([]byte, 0)
+	// respcache := make([]byte, 0)
+	writer := &RespLogging{
+		cache:          bytes.NewBuffer([]byte{}),
+		ResponseWriter: c.Writer,
+	}
 
 	if tr.Resp {
-		c.Writer = &RespLogging{
-			cache:          bytes.NewBuffer(respcache),
-			ResponseWriter: c.Writer,
-		}
+		c.Writer = writer
 	}
 
 	uri := c.Request.RequestURI
@@ -100,7 +102,9 @@ func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 	status := c.Writer.Status()
 	rawID := c.GetUint(KeyTracingID)
 
-	fullLogging := TracingDetails{
+	respcache := writer.cache.Bytes()
+
+	fullLogging := &TracingDetails{
 		Origin:   c.Request.Header.Get("Origin"),
 		Uri:      uri,
 		Method:   c.Request.Method,
