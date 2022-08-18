@@ -12,6 +12,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/jordan-wright/email v4.0.1-0.20210109023952-943e75fe5223+incompatible
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/spf13/cobra v1.5.0
 	github.com/spf13/viper v1.12.0
 	github.com/swaggo/files v0.0.0-20220610200504-28940afbdbfe
 	github.com/swaggo/gin-swagger v1.5.0
@@ -21,6 +22,12 @@ require (
 	go.uber.org/zap v1.21.0
 	gorm.io/driver/mysql v1.3.4
 	gorm.io/gorm v1.23.6
+)
+
+require (
+	code.cloudfoundry.org/clock v0.0.0-20180518195852-02e53af36e6c // indirect
+	github.com/gofrs/uuid v3.3.0+incompatible // indirect
+	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 )
 
 require (
@@ -51,6 +58,7 @@ require (
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
+	github.com/microsoft/ApplicationInsights-Go v0.4.4
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect

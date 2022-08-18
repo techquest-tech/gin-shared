@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/techquest-tech/gin-shared/pkg/event"
 	"go.uber.org/zap"
 )
 
@@ -38,6 +39,9 @@ func (handle *ReportError) RespErrorToClient(c *gin.Context, err interface{}) {
 func (handle *ReportError) Middleware(c *gin.Context) {
 	defer func() {
 		if err := recover(); err != nil {
+			if event.Bus != nil {
+				event.Bus.Publish(event.EventError, err)
+			}
 			handle.RespErrorToClient(c, err)
 		}
 	}()

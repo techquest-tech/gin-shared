@@ -5,11 +5,13 @@ import (
 	"log"
 	"time"
 
+	"github.com/asaskevich/EventBus"
 	"github.com/gin-contrib/cors"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
+	"github.com/techquest-tech/gin-shared/pkg/event"
 	"go.uber.org/dig"
 	"go.uber.org/zap"
 )
@@ -21,11 +23,15 @@ const (
 
 // var PreStarterOptions = dig.Group("PreStarter")
 
-func initEngine(logger *zap.Logger) *gin.Engine {
+func initEngine(logger *zap.Logger, bus EventBus.Bus, tr *TracingRequestService) *gin.Engine {
 
 	router := gin.New()
 	router.Use(ginzap.Ginzap(logger, time.RFC3339, false))
+	router.Use(tr.LogfullRequestDetails)
 	router.Use(ginzap.RecoveryWithZap(logger, true))
+
+	bus.Publish(event.EventInit, router)
+
 	logger.Info("router engine inited.")
 
 	// if viper.GetBool("prometheus.enabled") {
@@ -75,6 +81,7 @@ type Params struct {
 	dig.In
 	Logger      *zap.Logger
 	Router      *gin.Engine
+	Bus         EventBus.Bus
 	Controllers []DiController `group:"controllers"`
 }
 
@@ -97,6 +104,7 @@ func Start() error {
 		}
 
 		p.Logger.Info("app is stopping")
+		p.Bus.Publish(event.EventStopping)
 		p.Logger.Info("stopped.")
 		return nil
 	})

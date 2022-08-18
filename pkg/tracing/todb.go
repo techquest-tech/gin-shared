@@ -1,11 +1,10 @@
 package tracing
 
 import (
-	"bytes"
-	"io/ioutil"
-
-	"github.com/gin-gonic/gin"
+	"github.com/asaskevich/EventBus"
 	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/event"
+	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"github.com/techquest-tech/gin-shared/pkg/orm"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -13,24 +12,21 @@ import (
 
 type FullRequestDetails struct {
 	gorm.Model
-	Uri      string
-	Body     string
-	Status   int
-	TargetID uint
+	ginshared.TracingDetails
 }
 
-type TracingRequestService struct {
+type TracingRequestServiceDBImpl struct {
 	DB     *gorm.DB
 	Logger *zap.Logger
 }
 
-func NewTracingRequestService(db *gorm.DB, logger *zap.Logger) (*TracingRequestService, error) {
-	tr := &TracingRequestService{
+func NewTracingRequestService(db *gorm.DB, logger *zap.Logger) (*TracingRequestServiceDBImpl, error) {
+	tr := &TracingRequestServiceDBImpl{
 		DB:     db,
 		Logger: logger,
 	}
 	if viper.GetBool(orm.KeyInitDB) {
-		err := db.AutoMigrate(&FullRequestDetails{})
+		err := db.AutoMigrate(&ginshared.TracingDetails{})
 		if err != nil {
 			logger.Error("create fullRequestDetals failed.", zap.Error(err))
 		} else {
@@ -40,32 +36,19 @@ func NewTracingRequestService(db *gorm.DB, logger *zap.Logger) (*TracingRequestS
 	return tr, nil
 }
 
-func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
-	data := make([]byte, 0)
-
-	if c.Request.Body != nil {
-		data, _ = ioutil.ReadAll(c.Request.Body)
-		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(data))
-	}
-	uri := c.Request.RequestURI
-
-	c.Next()
-	status := c.Writer.Status()
-	rawID := c.GetUint(KeyTracingID)
-	go tr.doLogRequestBody(data, uri, status, rawID)
+func SubEventToDB(tr *TracingRequestServiceDBImpl, bus EventBus.Bus) ginshared.DiController {
+	bus.SubscribeAsync(event.EventTracing, tr.doLogRequestBody, false)
+	return nil
 }
 
-func (tr *TracingRequestService) doLogRequestBody(data []byte, uri string, status int, targetID uint) {
-	req := FullRequestDetails{
-		Body:     string(data),
-		Status:   status,
-		Uri:      uri,
-		TargetID: targetID,
+func (tr *TracingRequestServiceDBImpl) doLogRequestBody(req *ginshared.TracingDetails) {
+	model := FullRequestDetails{
+		TracingDetails: *req,
 	}
-	err := tr.DB.Save(&req).Error
+	err := tr.DB.Save(&model).Error
 	if err != nil {
 		tr.Logger.Error("save reqest failed", zap.Error(err))
 		return
 	}
-	tr.Logger.Info("save request details done.", zap.Uint("targetID", targetID))
+	tr.Logger.Info("save request details done.", zap.Uint("targetID", req.TargetID))
 }
