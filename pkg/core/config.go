@@ -8,17 +8,18 @@ import (
 	"github.com/spf13/viper"
 )
 
-var AppName = "app"
+var AppName = ""
+var Version = ""
 
 func InitConfig() {
 
-	appname := os.Getenv("APP_NAME")
-	if appname != "" {
-		AppName = appname
-		fmt.Printf("user AppName = %s", appname)
+	configName := os.Getenv("APP_CONFIG")
+	if configName == "" {
+		configName = "app"
+		fmt.Printf("user Config = %s", configName)
 	}
 
-	viper.SetConfigName(AppName)
+	viper.SetConfigName(configName)
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath("config")
 	viper.AddConfigPath("../config")

@@ -19,14 +19,18 @@ const (
 // FullRequestDetails
 
 type TracingDetails struct {
-	Origin   string
-	Uri      string
-	Method   string
-	Body     string
-	Durtion  time.Duration
-	Status   int
-	TargetID uint
-	Resp     string
+	Origin    string
+	Uri       string
+	Method    string
+	Body      string
+	Durtion   time.Duration
+	Status    int
+	TargetID  uint
+	Resp      string
+	ClientIP  string
+	UserAgent string
+	Device    string
+	// Props     map[string]interface{}
 }
 
 type RespLogging struct {
@@ -105,14 +109,17 @@ func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 	respcache := writer.cache.Bytes()
 
 	fullLogging := &TracingDetails{
-		Origin:   c.Request.Header.Get("Origin"),
-		Uri:      uri,
-		Method:   c.Request.Method,
-		Body:     string(reqcache),
-		Durtion:  dur,
-		Status:   status,
-		TargetID: rawID,
-		Resp:     string(respcache),
+		Origin:    c.Request.Header.Get("Origin"),
+		Uri:       uri,
+		Method:    c.Request.Method,
+		Body:      string(reqcache),
+		Durtion:   dur,
+		Status:    status,
+		TargetID:  rawID,
+		Resp:      string(respcache),
+		ClientIP:  c.ClientIP(),
+		UserAgent: c.Request.UserAgent(),
+		Device:    c.GetHeader("deviceID"),
 	}
 
 	tr.Bus.Publish(event.EventTracing, fullLogging)
