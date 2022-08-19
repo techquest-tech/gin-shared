@@ -3,6 +3,7 @@ package ginshared
 import (
 	"fmt"
 	"log"
+	"runtime"
 	"time"
 
 	"github.com/asaskevich/EventBus"
@@ -85,10 +86,16 @@ type Params struct {
 	Controllers []DiController `group:"controllers"`
 }
 
+func PrintVersion() {
+	zap.L().Info("Application info:", zap.String("appName", core.AppName),
+		zap.String("verion", core.Version),
+		zap.String("Go version", runtime.Version()),
+	)
+}
 func Start() error {
 	// core.Container.Provide(NewService)
 	err := core.Container.Invoke(func(p Params) error {
-
+		PrintVersion()
 		viper.SetDefault(KeyAddress, ":5000")
 
 		address := viper.GetString(KeyAddress)

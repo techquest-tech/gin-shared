@@ -22,29 +22,19 @@ THE SOFTWARE.
 package cmd
 
 import (
-	"runtime"
-
 	"github.com/spf13/cobra"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"go.uber.org/zap"
 )
 
-var (
-	Version = "latest"
-	AppName = "App"
-)
-
 // versionCmd represents the version command
 var VersionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "about ",
+	Short: "show app version ",
 	Long:  `check app version`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return ginshared.GetContainer().Invoke(func(log *zap.Logger) {
-			log.Info("Application inited.", zap.String("appName", AppName),
-				zap.String("verion", Version),
-				zap.String("Go version", runtime.Version()),
-			)
+			ginshared.PrintVersion()
 		})
 	},
 }

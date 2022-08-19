@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-var AppName = ""
-var Version = ""
+var AppName = "RFID App"
+var Version = "latest"
 
 func InitConfig() {
 
