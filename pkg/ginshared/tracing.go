@@ -44,11 +44,13 @@ func (w RespLogging) Write(b []byte) (int, error) {
 }
 
 type TracingRequestService struct {
-	Bus     EventBus.Bus
-	Log     *zap.Logger
-	Enabled bool
-	Request bool
-	Resp    bool
+	Bus      EventBus.Bus
+	Log      *zap.Logger
+	Enabled  bool
+	Request  bool
+	Resp     bool
+	Included []string
+	Excluded []string
 }
 
 func init() {
@@ -72,15 +74,41 @@ func init() {
 
 func (tr *TracingRequestService) LogBody(req *TracingDetails) {
 	log := tr.Log.With(zap.String("method", req.Method), zap.String("uri", req.Uri))
-	log.Info("req", zap.String("req body", req.Body))
-	log.Info("resp", zap.Int("status code", req.Status), zap.String("resp", req.Resp))
+	if req.Body != "" {
+		log.Info("req", zap.String("req body", req.Body))
+	}
+	if req.Resp != "" {
+		log.Info("resp", zap.Int("status code", req.Status), zap.String("resp", req.Resp))
+	}
+
 }
 
 func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 	start := time.Now()
 	reqcache := make([]byte, 0)
 
-	if tr.Request {
+	uri := c.Request.RequestURI
+	method := c.Request.Method
+
+	matchedUrl := c.FullPath()
+
+	matched := len(tr.Included) == 0
+	for _, item := range tr.Included {
+		if matchedUrl == item {
+			matched = true
+			break
+		}
+	}
+	if matched {
+		for _, item := range tr.Excluded {
+			if matchedUrl == item {
+				matched = false
+				break
+			}
+		}
+	}
+
+	if tr.Request && matched {
 		if c.Request.Body != nil {
 			reqcache, _ = io.ReadAll(c.Request.Body)
 			c.Request.Body = io.NopCloser(bytes.NewBuffer(reqcache))
@@ -93,11 +121,9 @@ func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 		ResponseWriter: c.Writer,
 	}
 
-	if tr.Resp {
+	if tr.Resp && matched {
 		c.Writer = writer
 	}
-
-	uri := c.Request.RequestURI
 
 	c.Next()
 
@@ -111,7 +137,7 @@ func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 	fullLogging := &TracingDetails{
 		Origin:    c.Request.Header.Get("Origin"),
 		Uri:       uri,
-		Method:    c.Request.Method,
+		Method:    method,
 		Body:      string(reqcache),
 		Durtion:   dur,
 		Status:    status,

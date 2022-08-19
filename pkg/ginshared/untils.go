@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
-	"io/ioutil"
+	"io"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -27,9 +27,9 @@ func DropDuplicated(raw []string) []string {
 func CloneRequestBody(c *gin.Context) []byte {
 	buf := make([]byte, 0)
 	if c.Request.Body != nil {
-		buf, _ = ioutil.ReadAll(c.Request.Body)
+		buf, _ = io.ReadAll(c.Request.Body)
 	}
-	c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(buf))
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(buf))
 	return buf
 }
 

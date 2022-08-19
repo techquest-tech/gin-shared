@@ -18,6 +18,7 @@ type ApplicationInsightsClient struct {
 	Key     string
 	Role    string
 	Version string
+	Details bool
 }
 
 func init() {
@@ -80,9 +81,15 @@ func (appins *ApplicationInsightsClient) ReportTracing(tr *ginshared.TracingDeta
 	t.Properties["user-agent"] = tr.UserAgent
 	t.Properties["device"] = tr.Device
 	if tr.Body != "" {
+		if appins.Details {
+			t.Properties["req"] = tr.Body
+		}
 		t.Measurements["body-size"] = float64(len(tr.Body))
 	}
 	if tr.Resp != "" {
+		if appins.Details {
+			t.Properties["resp"] = tr.Resp
+		}
 		t.Measurements["resp-size"] = float64(len(tr.Resp))
 	}
 
