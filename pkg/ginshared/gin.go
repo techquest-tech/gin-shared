@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/event"
+	"github.com/techquest-tech/gin-shared/pkg/tracing"
 	"go.uber.org/dig"
 	"go.uber.org/zap"
 )
@@ -24,7 +25,7 @@ const (
 
 // var PreStarterOptions = dig.Group("PreStarter")
 
-func initEngine(logger *zap.Logger, bus EventBus.Bus, tr *TracingRequestService) *gin.Engine {
+func initEngine(logger *zap.Logger, bus EventBus.Bus, tr *tracing.TracingRequestService) *gin.Engine {
 
 	router := gin.New()
 	router.Use(ginzap.Ginzap(logger, time.RFC3339, false))
@@ -76,6 +77,7 @@ func init() {
 	core.Container.Provide(initEngine)
 
 	core.Container.Provide(initBasedRouterGroup)
+	core.Container.Provide(tracing.NewTracingRequestService)
 }
 
 type Params struct {

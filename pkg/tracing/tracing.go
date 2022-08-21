@@ -1,4 +1,4 @@
-package ginshared
+package tracing
 
 import (
 	"bytes"
@@ -53,34 +53,22 @@ type TracingRequestService struct {
 	Excluded []string
 }
 
-func init() {
-	Provide(func(bus EventBus.Bus, logger *zap.Logger) *TracingRequestService {
-		sr := &TracingRequestService{
-			Bus: bus,
-			Log: logger,
-		}
-
-		settings := viper.Sub("tracing")
-		if settings != nil {
-			settings.Unmarshal(sr)
-		}
-
-		if sr.Request || sr.Resp {
-			bus.SubscribeAsync(event.EventTracing, sr.LogBody, false)
-		}
-		return sr
-	})
-}
-
-func (tr *TracingRequestService) LogBody(req *TracingDetails) {
-	log := tr.Log.With(zap.String("method", req.Method), zap.String("uri", req.Uri))
-	if req.Body != "" {
-		log.Info("req", zap.String("req body", req.Body))
-	}
-	if req.Resp != "" {
-		log.Info("resp", zap.Int("status code", req.Status), zap.String("resp", req.Resp))
+var InitTracingService = func(bus EventBus.Bus, logger *zap.Logger) *TracingRequestService {
+	sr := &TracingRequestService{
+		Bus: bus,
+		Log: logger,
 	}
 
+	settings := viper.Sub("tracing")
+	if settings != nil {
+		settings.Unmarshal(sr)
+	}
+	logger.Info("tracing service is enabled.")
+	if sr.Request || sr.Resp {
+		c := InitConsoleTracingService(sr.Log)
+		sr.Bus.SubscribeAsync(event.EventTracing, c.LogBody, false)
+	}
+	return sr
 }
 
 func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {

@@ -4,15 +4,13 @@ import (
 	"github.com/asaskevich/EventBus"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/event"
-	"github.com/techquest-tech/gin-shared/pkg/ginshared"
-	"github.com/techquest-tech/gin-shared/pkg/orm"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 type FullRequestDetails struct {
 	gorm.Model
-	ginshared.TracingDetails
+	TracingDetails
 }
 
 type TracingRequestServiceDBImpl struct {
@@ -25,8 +23,8 @@ func NewTracingRequestService(db *gorm.DB, logger *zap.Logger) (*TracingRequestS
 		DB:     db,
 		Logger: logger,
 	}
-	if viper.GetBool(orm.KeyInitDB) {
-		err := db.AutoMigrate(&ginshared.TracingDetails{})
+	if viper.GetBool("database.initDB") {
+		err := db.AutoMigrate(&TracingDetails{})
 		if err != nil {
 			logger.Error("create fullRequestDetals failed.", zap.Error(err))
 		} else {
@@ -36,12 +34,11 @@ func NewTracingRequestService(db *gorm.DB, logger *zap.Logger) (*TracingRequestS
 	return tr, nil
 }
 
-func SubEventToDB(tr *TracingRequestServiceDBImpl, bus EventBus.Bus) ginshared.DiController {
+func SubEventToDB(tr *TracingRequestServiceDBImpl, bus EventBus.Bus) {
 	bus.SubscribeAsync(event.EventTracing, tr.doLogRequestBody, false)
-	return nil
 }
 
-func (tr *TracingRequestServiceDBImpl) doLogRequestBody(req *ginshared.TracingDetails) {
+func (tr *TracingRequestServiceDBImpl) doLogRequestBody(req *TracingDetails) {
 	model := FullRequestDetails{
 		TracingDetails: *req,
 	}
