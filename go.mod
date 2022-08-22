@@ -9,7 +9,7 @@ require (
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.8.1
 	github.com/go-playground/validator/v10 v10.11.0
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.1.2
 	github.com/jordan-wright/email v4.0.1-0.20210109023952-943e75fe5223+incompatible
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/cobra v1.5.0

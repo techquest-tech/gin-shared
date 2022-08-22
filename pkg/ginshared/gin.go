@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/event"
+	"github.com/techquest-tech/gin-shared/pkg/prom"
 	"github.com/techquest-tech/gin-shared/pkg/tracing"
 	"go.uber.org/dig"
 	"go.uber.org/zap"
@@ -31,6 +32,8 @@ func initEngine(logger *zap.Logger, bus EventBus.Bus, tr *tracing.TracingRequest
 	router.Use(ginzap.Ginzap(logger, time.RFC3339, false))
 	router.Use(tr.LogfullRequestDetails)
 	router.Use(ginzap.RecoveryWithZap(logger, true))
+
+	prom.Prom(logger, router)
 
 	bus.Publish(event.EventInit, router)
 
