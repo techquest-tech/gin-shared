@@ -26,12 +26,16 @@ const (
 
 // var PreStarterOptions = dig.Group("PreStarter")
 
-func initEngine(logger *zap.Logger, bus EventBus.Bus, tr *tracing.TracingRequestService) *gin.Engine {
+func initEngine(logger *zap.Logger, bus EventBus.Bus, tr *tracing.TracingRequestService, tls *Tlssettings) *gin.Engine {
 
 	router := gin.New()
-	router.Use(ginzap.Ginzap(logger, time.RFC3339, false))
 	router.Use(tr.LogfullRequestDetails)
+	router.Use(ginzap.Ginzap(logger, time.RFC3339, false))
 	router.Use(ginzap.RecoveryWithZap(logger, true))
+
+	if tls.Enabled {
+		router.Use(tls.Middleware())
+	}
 
 	prom.Prom(logger, router)
 
@@ -88,6 +92,7 @@ type Params struct {
 	Logger      *zap.Logger
 	Router      *gin.Engine
 	Bus         EventBus.Bus
+	Tls         *Tlssettings
 	Controllers []DiController `group:"controllers"`
 }
 
@@ -99,7 +104,7 @@ func PrintVersion() {
 }
 func Start() error {
 	// core.Container.Provide(NewService)
-	err := core.Container.Invoke(func(p Params) error {
+	err := core.Container.Invoke(func(p Params) (err error) {
 		PrintVersion()
 		viper.SetDefault(KeyAddress, ":5000")
 
@@ -108,8 +113,12 @@ func Start() error {
 		if len(p.Controllers) == 0 {
 			return fmt.Errorf("no controller available")
 		}
+		if p.Tls.Enabled {
+			err = p.Router.RunTLS(address, p.Tls.Pem, p.Tls.Key)
+		} else {
+			err = p.Router.Run(address)
+		}
 
-		err := p.Router.Run(address)
 		if err != nil {
 			log.Fatalln("run app failed. ", err)
 			return err
