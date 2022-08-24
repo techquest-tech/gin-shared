@@ -8,6 +8,7 @@ import (
 	"github.com/asaskevich/EventBus"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/event"
 	"go.uber.org/zap"
 )
@@ -44,6 +45,7 @@ func (w RespLogging) Write(b []byte) (int, error) {
 }
 
 type TracingRequestService struct {
+	core.DefaultComponent
 	Bus      EventBus.Bus
 	Log      *zap.Logger
 	Enabled  bool
@@ -51,6 +53,13 @@ type TracingRequestService struct {
 	Resp     bool
 	Included []string
 	Excluded []string
+}
+
+func (tr *TracingRequestService) Priority() int { return 10 }
+
+func (tr *TracingRequestService) OnEngineInited(r *gin.Engine) error {
+	r.Use(tr.LogfullRequestDetails)
+	return nil
 }
 
 var InitTracingService = func(bus EventBus.Bus, logger *zap.Logger) *TracingRequestService {
@@ -68,6 +77,7 @@ var InitTracingService = func(bus EventBus.Bus, logger *zap.Logger) *TracingRequ
 		c := InitConsoleTracingService(sr.Log)
 		sr.Bus.SubscribeAsync(event.EventTracing, c.LogBody, false)
 	}
+	core.RegisterComponent(sr)
 	return sr
 }
 
