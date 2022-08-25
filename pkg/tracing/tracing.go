@@ -20,17 +20,17 @@ const (
 // FullRequestDetails
 
 type TracingDetails struct {
-	Origin    string
-	Uri       string
-	Method    string
-	Body      string
-	Durtion   time.Duration
-	Status    int
-	TargetID  uint
-	Resp      string
-	ClientIP  string
-	UserAgent string
-	Device    string
+	Optionname string
+	Uri        string
+	Method     string
+	Body       string
+	Durtion    time.Duration
+	Status     int
+	TargetID   uint
+	Resp       string
+	ClientIP   string
+	UserAgent  string
+	Device     string
 	// Props     map[string]interface{}
 }
 
@@ -89,6 +89,10 @@ func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 	method := c.Request.Method
 
 	matchedUrl := c.FullPath()
+	if matchedUrl == "" {
+		tr.Log.Warn("matched path failed. use uri as matched url", zap.String("uri", uri))
+		matchedUrl = uri
+	}
 
 	matched := len(tr.Included) == 0
 	for _, item := range tr.Included {
@@ -133,17 +137,17 @@ func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 	respcache := writer.cache.Bytes()
 
 	fullLogging := &TracingDetails{
-		Origin:    c.Request.Header.Get("Origin"),
-		Uri:       uri,
-		Method:    method,
-		Body:      string(reqcache),
-		Durtion:   dur,
-		Status:    status,
-		TargetID:  rawID,
-		Resp:      string(respcache),
-		ClientIP:  c.ClientIP(),
-		UserAgent: c.Request.UserAgent(),
-		Device:    c.GetHeader("deviceID"),
+		Optionname: matchedUrl,
+		Uri:        uri,
+		Method:     method,
+		Body:       string(reqcache),
+		Durtion:    dur,
+		Status:     status,
+		TargetID:   rawID,
+		Resp:       string(respcache),
+		ClientIP:   c.ClientIP(),
+		UserAgent:  c.Request.UserAgent(),
+		Device:     c.GetHeader("deviceID"),
 	}
 
 	tr.Bus.Publish(event.EventTracing, fullLogging)
