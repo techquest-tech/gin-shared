@@ -8,6 +8,7 @@ import (
 	"github.com/asaskevich/EventBus"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/event"
 	"go.uber.org/zap"
 )
@@ -19,17 +20,17 @@ const (
 // FullRequestDetails
 
 type TracingDetails struct {
-	Origin    string
-	Uri       string
-	Method    string
-	Body      string
-	Durtion   time.Duration
-	Status    int
-	TargetID  uint
-	Resp      string
-	ClientIP  string
-	UserAgent string
-	Device    string
+	Optionname string
+	Uri        string
+	Method     string
+	Body       string
+	Durtion    time.Duration
+	Status     int
+	TargetID   uint
+	Resp       string
+	ClientIP   string
+	UserAgent  string
+	Device     string
 	// Props     map[string]interface{}
 }
 
@@ -44,6 +45,7 @@ func (w RespLogging) Write(b []byte) (int, error) {
 }
 
 type TracingRequestService struct {
+	core.DefaultComponent
 	Bus      EventBus.Bus
 	Log      *zap.Logger
 	Enabled  bool
@@ -51,6 +53,13 @@ type TracingRequestService struct {
 	Resp     bool
 	Included []string
 	Excluded []string
+}
+
+func (tr *TracingRequestService) Priority() int { return 10 }
+
+func (tr *TracingRequestService) OnEngineInited(r *gin.Engine) error {
+	r.Use(tr.LogfullRequestDetails)
+	return nil
 }
 
 var InitTracingService = func(bus EventBus.Bus, logger *zap.Logger) *TracingRequestService {
@@ -68,6 +77,7 @@ var InitTracingService = func(bus EventBus.Bus, logger *zap.Logger) *TracingRequ
 		c := InitConsoleTracingService(sr.Log)
 		sr.Bus.SubscribeAsync(event.EventTracing, c.LogBody, false)
 	}
+	core.RegisterComponent(sr)
 	return sr
 }
 
@@ -79,6 +89,10 @@ func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 	method := c.Request.Method
 
 	matchedUrl := c.FullPath()
+	if matchedUrl == "" {
+		tr.Log.Warn("matched path failed. use uri as matched url", zap.String("uri", uri))
+		matchedUrl = uri
+	}
 
 	matched := len(tr.Included) == 0
 	for _, item := range tr.Included {
@@ -123,17 +137,17 @@ func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 	respcache := writer.cache.Bytes()
 
 	fullLogging := &TracingDetails{
-		Origin:    c.Request.Header.Get("Origin"),
-		Uri:       uri,
-		Method:    method,
-		Body:      string(reqcache),
-		Durtion:   dur,
-		Status:    status,
-		TargetID:  rawID,
-		Resp:      string(respcache),
-		ClientIP:  c.ClientIP(),
-		UserAgent: c.Request.UserAgent(),
-		Device:    c.GetHeader("deviceID"),
+		Optionname: matchedUrl,
+		Uri:        uri,
+		Method:     method,
+		Body:       string(reqcache),
+		Durtion:    dur,
+		Status:     status,
+		TargetID:   rawID,
+		Resp:       string(respcache),
+		ClientIP:   c.ClientIP(),
+		UserAgent:  c.Request.UserAgent(),
+		Device:     c.GetHeader("deviceID"),
 	}
 
 	tr.Bus.Publish(event.EventTracing, fullLogging)

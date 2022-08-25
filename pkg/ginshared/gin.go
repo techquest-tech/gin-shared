@@ -7,14 +7,11 @@ import (
 	"time"
 
 	"github.com/asaskevich/EventBus"
-	"github.com/gin-contrib/cors"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/event"
-	"github.com/techquest-tech/gin-shared/pkg/prom"
-	"github.com/techquest-tech/gin-shared/pkg/tracing"
 	"go.uber.org/dig"
 	"go.uber.org/zap"
 )
@@ -24,12 +21,10 @@ const (
 	KeyInitDB  = "database.initDB"
 )
 
-// var PreStarterOptions = dig.Group("PreStarter")
-
-func initEngine(logger *zap.Logger, bus EventBus.Bus, tr *tracing.TracingRequestService, tls *Tlssettings) *gin.Engine {
+func initEngine(logger *zap.Logger, bus EventBus.Bus, p *core.Components,
+	tls *Tlssettings) *gin.Engine {
 
 	router := gin.New()
-	router.Use(tr.LogfullRequestDetails)
 	router.Use(ginzap.Ginzap(logger, time.RFC3339, false))
 	router.Use(ginzap.RecoveryWithZap(logger, true))
 
@@ -37,38 +32,14 @@ func initEngine(logger *zap.Logger, bus EventBus.Bus, tr *tracing.TracingRequest
 		router.Use(tls.Middleware())
 	}
 
-	prom.Prom(logger, router)
+	// prom.Prom(logger, router)
+
+	p.InitAll(router)
 
 	bus.Publish(event.EventInit, router)
 
 	logger.Info("router engine inited.")
 
-	// if viper.GetBool("prometheus.enabled") {
-	// 	p := ginprom.New(
-	// 		ginprom.Engine(router),
-	// 		ginprom.Subsystem("gin"),
-	// 		ginprom.Path("/metrics"),
-	// 	)
-	// 	router.Use(p.Instrument())
-	// 	logger.Info("prometheus module enabled.")
-	// }
-
-	//check CORS settings
-	corsSettings := viper.Sub("CORS")
-	if corsSettings != nil {
-		enabled := corsSettings.GetBool("enabled")
-		if enabled {
-			router.Use(cors.New(cors.Config{
-				AllowOrigins:     []string{"*"},
-				AllowMethods:     []string{"*"},
-				AllowHeaders:     []string{"*"},
-				ExposeHeaders:    []string{"*"},
-				AllowCredentials: true,
-				MaxAge:           12 * time.Hour,
-			}))
-			logger.Info("CORS enabled, defaults allow all")
-		}
-	}
 	return router
 }
 
@@ -84,7 +55,9 @@ func init() {
 	core.Container.Provide(initEngine)
 
 	core.Container.Provide(initBasedRouterGroup)
-	core.Container.Provide(tracing.NewTracingRequestService)
+	// core.Container.Provide(tracing.NewTracingRequestService)
+	// core.RegisterComponent(&cors.CorsComponent{})
+	// core.RegisterComponent(&prom.Prom{})
 }
 
 type Params struct {

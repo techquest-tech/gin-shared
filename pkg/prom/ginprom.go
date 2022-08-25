@@ -4,20 +4,27 @@ import (
 	"github.com/Depado/ginprom"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 )
 
-func Prom(logger *zap.Logger, router *gin.Engine) {
+type Prom struct {
+	core.DefaultComponent
+}
+
+func (p Prom) OnEngineInited(r *gin.Engine) error {
+	logger := zap.L()
 	logger.Info("Gin prometheus module loaded.")
 	if viper.GetBool("prometheus.enabled") {
 		p := ginprom.New(
-			ginprom.Engine(router),
+			ginprom.Engine(r),
 			ginprom.Subsystem("gin"),
 			ginprom.Path("/metrics"),
 		)
-		router.Use(p.Instrument())
+		r.Use(p.Instrument())
 		logger.Info("prometheus module enabled.")
 	}
+	return nil
 }
 
 // func init() {
