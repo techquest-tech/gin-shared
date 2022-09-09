@@ -10,7 +10,6 @@ import (
 	"go.uber.org/zap"
 )
 
-
 type SmtpSettings struct {
 	Host     string
 	Port     int
@@ -22,28 +21,28 @@ type SmtpSettings struct {
 type EmailTmpl struct {
 	Subject string
 	Body    string
-	Notfound string
+	// Notfound string
 	Receivers []string
-	tSub    *template.Template
-	tBody   *template.Template
-	tNotfound *template.Template
+	tSub      *template.Template
+	tBody     *template.Template
+	// tNotfound *template.Template
 }
 
 type EmailNotifer struct {
-	Logger    *zap.Logger
-	From      string
+	Logger *zap.Logger
+	From   string
 	//Receivers []string
-	SMTP      SmtpSettings
-	Template  map[string]*EmailTmpl
+	SMTP     SmtpSettings
+	Template map[string]*EmailTmpl
 }
 
 func (en *EmailNotifer) PostInit() error {
 	for _, item := range en.Template {
 		item.tSub = template.Must(template.New("sub").Parse(item.Subject))
 		item.tBody = template.Must(template.New("body").Parse(item.Body))
-		item.tNotfound = template.Must(template.New("body").Parse(item.Notfound))
+		// item.tNotfound = template.Must(template.New("body").Parse(item.Notfound))
 
-		en.Logger.Info("template's receivers", zap.Any("template",item))
+		en.Logger.Info("template's receivers", zap.Any("template", item))
 	}
 
 	en.Logger.Debug("template is ready")
@@ -76,19 +75,19 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 
 	out = bytes.Buffer{}
 
-	if attachments != nil {
-		err = tmp.tBody.Execute(&out, data)
-		if err != nil {
-			en.Logger.Error("match email content failed.", zap.Error(err))
-			return err
-		}
-	} else {
-		err = tmp.tNotfound.Execute(&out, data)
-		if err != nil {
-			en.Logger.Error("match email content failed.", zap.Error(err))
-			return err
-		}
+	// if attachments != nil {
+	err = tmp.tBody.Execute(&out, data)
+	if err != nil {
+		en.Logger.Error("match email content failed.", zap.Error(err))
+		return err
 	}
+	// } else {
+	// 	err = tmp.tNotfound.Execute(&out, data)
+	// 	if err != nil {
+	// 		en.Logger.Error("match email content failed.", zap.Error(err))
+	// 		return err
+	// 	}
+	// }
 
 	e.HTML = out.Bytes()
 
