@@ -2,11 +2,15 @@ package orm
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
 )
 
@@ -25,6 +29,18 @@ var DialectorMap = make(map[string]OrmDialector)
 
 func InitDefaultDB(logger *zap.Logger) *gorm.DB {
 	return InitDB("database", logger)
+}
+
+func SessionWithConfig(slowThreshold time.Duration, ignoredNotFound bool) *gorm.Session {
+	return &gorm.Session{
+		Logger: logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags),
+			logger.Config{
+				SlowThreshold:             slowThreshold,
+				LogLevel:                  logger.Warn,
+				IgnoreRecordNotFoundError: ignoredNotFound,
+				Colorful:                  true,
+			}),
+	}
 }
 
 func InitDB(sub string, logger *zap.Logger) *gorm.DB {
