@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/Depado/ginprom v1.7.4
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
+	github.com/eclipse/paho.mqtt.golang v1.4.1
 	github.com/gin-contrib/cors v1.4.0
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.8.1
@@ -22,6 +23,11 @@ require (
 	go.uber.org/zap v1.22.0
 	gorm.io/driver/mysql v1.3.6
 	gorm.io/gorm v1.23.8
+)
+
+require (
+	github.com/gorilla/websocket v1.4.2 // indirect
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 )
 
 require (
