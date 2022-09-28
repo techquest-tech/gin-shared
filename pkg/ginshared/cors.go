@@ -1,5 +1,4 @@
-//go:build cors
-// +build cors
+//go:build all || cors
 
 package ginshared
 

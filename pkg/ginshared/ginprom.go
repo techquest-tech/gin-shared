@@ -1,5 +1,4 @@
-//go:build prom
-// +build prom
+//go:build prom || all
 
 package ginshared
 

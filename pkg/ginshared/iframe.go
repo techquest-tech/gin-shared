@@ -1,5 +1,4 @@
-//go:build iframe
-// +build iframe
+//go:build iframe || all
 
 package ginshared
 
