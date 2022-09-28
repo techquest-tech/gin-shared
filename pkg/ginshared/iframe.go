@@ -1,3 +1,6 @@
+//go:build iframe
+// +build iframe
+
 package ginshared
 
 import (

@@ -1,4 +1,7 @@
-package cors
+//go:build cors
+// +build cors
+
+package ginshared
 
 import (
 	"time"
@@ -39,4 +42,8 @@ func (c CorsComponent) OnEngineInited(r *gin.Engine) error {
 		log.Info("CORS is disabled.")
 	}
 	return nil
+}
+
+func init() {
+	core.RegisterComponent(&CorsComponent{})
 }

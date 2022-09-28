@@ -1,4 +1,7 @@
-package prom
+//go:build prom
+// +build prom
+
+package ginshared
 
 import (
 	"github.com/Depado/ginprom"
@@ -27,6 +30,6 @@ func (p Prom) OnEngineInited(r *gin.Engine) error {
 	return nil
 }
 
-// func init() {
-// 	ginshared.ProvideController(enabledGinprom)
-// }
+func init() {
+	core.RegisterComponent(&Prom{})
+}
