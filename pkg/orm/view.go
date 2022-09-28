@@ -5,13 +5,8 @@ import (
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
-
-func init() {
-	DialectorMap["mysql"] = mysql.Open
-}
 
 type GetViewSql func(tablePrefix, view, query string) string
 
