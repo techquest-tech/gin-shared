@@ -4,12 +4,23 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"github.com/tbaehler/gin-keycloak/pkg/ginkeycloak"
-	"github.com/techquest-tech/gin-shared/pkg/ginshared"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 )
 
+func MustLogin() gin.HandlerFunc {
+	keycloakconfig := viper.Sub("keycloak")
+	buildconfig := ginkeycloak.KeycloakConfig{}
+	if keycloakconfig != nil {
+		keycloakconfig.Unmarshal(&buildconfig)
+	}
+	return func(ctx *gin.Context) {
+		ginkeycloak.Auth(ginkeycloak.AuthCheck(), buildconfig)
+	}
+}
+
 func init() {
-	ginshared.GetContainer().Provide(NewKeycloakConfig)
+	core.GetContainer().Provide(NewKeycloakConfig)
 }
 
 type KeycloakConfig struct {
