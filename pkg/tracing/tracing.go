@@ -29,7 +29,7 @@ type TracingDetails struct {
 	TargetID   uint
 	Resp       string
 	ClientIP   string `gorm:"size:64"`
-	UserAgent  string `gorm:"size:64"`
+	UserAgent  string `gorm:"size:256"`
 	Device     string `gorm:"size:64"`
 	// Props     map[string]interface{}
 }
@@ -55,7 +55,7 @@ type TracingRequestService struct {
 	Excluded []string
 }
 
-func (tr *TracingRequestService) Priority() int { return 10 }
+func (tr *TracingRequestService) Priority() int { return 5 }
 
 func (tr *TracingRequestService) OnEngineInited(r *gin.Engine) error {
 	r.Use(tr.LogfullRequestDetails)

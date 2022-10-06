@@ -1,6 +1,8 @@
 package keycloak
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"github.com/tbaehler/gin-keycloak/pkg/ginkeycloak"
@@ -15,17 +17,27 @@ func MustLogin() gin.HandlerFunc {
 		keycloakconfig.Unmarshal(&buildconfig)
 	}
 	logCurrentUser := viper.GetBool("keycloak.debug")
+	keycloakFunc := ginkeycloak.Auth(ginkeycloak.AuthCheck(), buildconfig)
+
 	return func(ctx *gin.Context) {
+		keycloakFunc(ctx)
 		if logCurrentUser {
 			tk, ok := ctx.Get("token")
 			if ok {
-				// token:=tk.(ginkeycloak.KeyCloakToken)
-				zap.L().Debug("keycloak token", zap.Any("token", tk))
+				token := tk.(ginkeycloak.KeyCloakToken)
+				auth := time.Unix(token.Iat, 0)
+				exp := time.Unix(token.Exp, 0)
+
+				zap.L().Debug("keycloak token",
+					zap.String("user", token.PreferredUsername),
+					zap.Time("issue at", auth),
+					zap.Time("expire at", exp),
+					zap.String("session", token.SessionState),
+				)
 			} else {
 				zap.L().Warn("no token provided.")
 			}
 		}
-		ginkeycloak.Auth(ginkeycloak.AuthCheck(), buildconfig)
 	}
 }
 

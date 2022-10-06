@@ -39,6 +39,10 @@ func SubEventToDB(tr *TracingRequestServiceDBImpl, bus EventBus.Bus) {
 }
 
 func (tr *TracingRequestServiceDBImpl) doLogRequestBody(req *TracingDetails) {
+	if len(req.Body) == 0 && len(req.Resp) == 0 {
+		tr.Logger.Debug("both req & resp is emtpy, ignored.")
+		return
+	}
 	model := FullRequestDetails{
 		TracingDetails: *req,
 	}
