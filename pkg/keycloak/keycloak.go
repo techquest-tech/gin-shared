@@ -14,7 +14,17 @@ func MustLogin() gin.HandlerFunc {
 	if keycloakconfig != nil {
 		keycloakconfig.Unmarshal(&buildconfig)
 	}
+	logCurrentUser := viper.GetBool("keycloak.debug")
 	return func(ctx *gin.Context) {
+		if logCurrentUser {
+			tk, ok := ctx.Get("token")
+			if ok {
+				// token:=tk.(ginkeycloak.KeyCloakToken)
+				zap.L().Debug("keycloak token", zap.Any("token", tk))
+			} else {
+				zap.L().Warn("no token provided.")
+			}
+		}
 		ginkeycloak.Auth(ginkeycloak.AuthCheck(), buildconfig)
 	}
 }

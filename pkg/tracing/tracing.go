@@ -20,17 +20,17 @@ const (
 // FullRequestDetails
 
 type TracingDetails struct {
-	Optionname string
-	Uri        string
-	Method     string
+	Optionname string `gorm:"size:64"`
+	Uri        string `gorm:"size:256"`
+	Method     string `gorm:"size:16"`
 	Body       string
 	Durtion    time.Duration
 	Status     int
 	TargetID   uint
 	Resp       string
-	ClientIP   string
-	UserAgent  string
-	Device     string
+	ClientIP   string `gorm:"size:64"`
+	UserAgent  string `gorm:"size:64"`
+	Device     string `gorm:"size:64"`
 	// Props     map[string]interface{}
 }
 
@@ -48,7 +48,7 @@ type TracingRequestService struct {
 	core.DefaultComponent
 	Bus      EventBus.Bus
 	Log      *zap.Logger
-	Enabled  bool
+	Console  bool
 	Request  bool
 	Resp     bool
 	Included []string
@@ -73,7 +73,7 @@ var InitTracingService = func(bus EventBus.Bus, logger *zap.Logger) *TracingRequ
 		settings.Unmarshal(sr)
 	}
 	logger.Info("tracing service is enabled.")
-	if sr.Request || sr.Resp {
+	if (sr.Request || sr.Resp) && sr.Console {
 		c := InitConsoleTracingService(sr.Log)
 		sr.Bus.SubscribeAsync(event.EventTracing, c.LogBody, false)
 	}

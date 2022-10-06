@@ -24,7 +24,7 @@ func NewTracingRequestService(db *gorm.DB, logger *zap.Logger) (*TracingRequestS
 		Logger: logger,
 	}
 	if viper.GetBool("database.initDB") {
-		err := db.AutoMigrate(&TracingDetails{})
+		err := db.AutoMigrate(&FullRequestDetails{})
 		if err != nil {
 			logger.Error("create fullRequestDetals failed.", zap.Error(err))
 		} else {
