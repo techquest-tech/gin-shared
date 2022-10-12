@@ -69,9 +69,13 @@ var InitTracingService = func(bus EventBus.Bus, logger *zap.Logger) *TracingRequ
 	}
 
 	settings := viper.Sub("tracing")
-	if settings != nil {
-		settings.Unmarshal(sr)
+	if settings == nil {
+		logger.Warn("tracing module loaded, but disabled.")
+		return nil
 	}
+	// if settings != nil {
+	settings.Unmarshal(sr)
+	// }
 	logger.Info("tracing service is enabled.")
 	if (sr.Request || sr.Resp) && sr.Console {
 		c := InitConsoleTracingService(sr.Log)
