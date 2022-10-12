@@ -42,7 +42,7 @@ func (en *EmailNotifer) PostInit() error {
 		item.tBody = template.Must(template.New("body").Parse(item.Body))
 		// item.tNotfound = template.Must(template.New("body").Parse(item.Notfound))
 
-		en.Logger.Info("template's receivers", zap.Any("template", item))
+		en.Logger.Debug("template's receivers", zap.Any("template", item))
 	}
 
 	en.Logger.Debug("template is ready")
@@ -60,9 +60,12 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 
 	out := bytes.Buffer{}
 
-	tmp := en.Template[tmpl]
-	en.Logger.Info("template", zap.String("tmpl", tmpl))
-	en.Logger.Info("template is ", zap.Any("", tmp))
+	tmp, ok := en.Template[tmpl]
+	if !ok {
+		return fmt.Errorf("%s is missed from settings", tmpl)
+	}
+	en.Logger.Debug("template", zap.String("tmpl", tmpl))
+	en.Logger.Debug("template is ", zap.Any("", tmp))
 	e.To = tmp.Receivers
 
 	err := tmp.tSub.Execute(&out, data)
