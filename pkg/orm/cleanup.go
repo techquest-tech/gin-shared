@@ -66,7 +66,7 @@ func (cs *CleanupService) Cleanup(req *DBCleanupReq) error {
 		done := false
 		for i := 0; !done; i++ {
 			cs.logger.Info("delete row", zap.String("table", t), zap.Int("from", i*req.Batch+1), zap.Int("to", (i+1)*req.Batch))
-			result := db.Exec(sql, starttime, req.Batch)
+			result := db.Session(SessionWithConfig(60*time.Second, true)).Exec(sql, starttime, req.Batch)
 			if result.Error != nil {
 				cs.logger.Error("delete data failed", zap.Error(result.Error))
 				return fmt.Errorf("delete data failed. %v", result.Error)
@@ -106,7 +106,7 @@ func InitScheduleCleanupJob(settingkey string) interface{} {
 	}
 }
 
-func DoCleanup(settingkey string, tables []string) interface{} {
+func DoCleanup(settingkey string, tables []string, col string, duration string) interface{} {
 	return func(logger *zap.Logger, cleanupService *CleanupService) error {
 		settings := viper.Sub(settingkey)
 		if settings == nil {
@@ -118,6 +118,12 @@ func DoCleanup(settingkey string, tables []string) interface{} {
 		settings.Unmarshal(req)
 		if len(tables) > 0 {
 			req.Tables = tables
+		}
+		if col != "" {
+			req.DeletedField = col
+		}
+		if duration != "" {
+			req.Duration = duration
 		}
 		err := cleanupService.Cleanup(req)
 		if err != nil {

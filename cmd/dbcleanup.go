@@ -28,16 +28,20 @@ import (
 )
 
 var tables = make([]string, 0)
+var col = ""
+var duration = ""
 
 // versionCmd represents the version command
 var CleanupCmd = &cobra.Command{
 	Use:   "dbcleanup",
 	Short: "run DB clean up",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ginshared.GetContainer().Invoke(orm.DoCleanup("cleanup", tables))
+		return ginshared.GetContainer().Invoke(orm.DoCleanup("cleanup", tables, col, duration))
 	},
 }
 
 func init() {
 	CleanupCmd.PersistentFlags().StringArrayVarP(&tables, "table", "t", []string{}, "tables to be cleanup, or tables in yaml file")
+	CleanupCmd.PersistentFlags().StringVarP(&col, "col", "c", "", "col name for the duration")
+	CleanupCmd.PersistentFlags().StringVarP(&duration, "duration", "d", "", "data older than duration")
 }
