@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
+	"github.com/techquest-tech/gin-shared/pkg/schedule"
 	str2duration "github.com/xhit/go-str2duration/v2"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -80,6 +82,53 @@ func (cs *CleanupService) Cleanup(req *DBCleanupReq) error {
 	return nil
 }
 
+func InitScheduleCleanupJob(settingkey string) interface{} {
+	return func(logger *zap.Logger, cleanupService *CleanupService) ginshared.DiController {
+		settings := viper.Sub(settingkey)
+		if settings == nil {
+			logger.Info("cleanup job is not scheduled.")
+			return nil
+		}
+		schedulestr := settings.GetString("schedule")
+		if schedulestr == "" {
+			logger.Info("cleanup job is not scheduled.")
+			return nil
+		}
+
+		req := cleanupService.GetDefaultRequest()
+		settings.Unmarshal(req)
+
+		schedule.CreateSchedule("database_cleanup", schedulestr, func() {
+			cleanupService.Cleanup(req)
+		}, logger)
+
+		return nil
+	}
+}
+
+func DoCleanup(settingkey string, tables []string) interface{} {
+	return func(logger *zap.Logger, cleanupService *CleanupService) error {
+		settings := viper.Sub(settingkey)
+		if settings == nil {
+			logger.Info("cleanup job is not scheduled.")
+			return nil
+		}
+
+		req := cleanupService.GetDefaultRequest()
+		settings.Unmarshal(req)
+		if len(tables) > 0 {
+			req.Tables = tables
+		}
+		err := cleanupService.Cleanup(req)
+		if err != nil {
+			logger.Error("clean up failed", zap.Error(err))
+			return err
+		}
+
+		return nil
+	}
+}
+
 func init() {
 	ginshared.GetContainer().Provide(func(logger *zap.Logger, db *gorm.DB) *CleanupService {
 		cs := &CleanupService{
@@ -88,4 +137,5 @@ func init() {
 		cs.RegConnection("default", db)
 		return cs
 	})
+	ginshared.ProvideController(InitScheduleCleanupJob("cleanup"))
 }
