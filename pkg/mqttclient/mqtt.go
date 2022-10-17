@@ -8,14 +8,15 @@ import (
 )
 
 type MqttService struct {
-	Endpoint string
-	User     string
-	Password string
-	ClientID string
-	Qos      byte
-	subs     map[string]mqtt.MessageHandler
-	Logger   *zap.Logger
-	Client   mqtt.Client
+	Endpoint     string
+	User         string
+	Password     string
+	ClientID     string
+	Cleansession bool
+	Qos          byte
+	subs         map[string]mqtt.MessageHandler
+	Logger       *zap.Logger
+	Client       mqtt.Client
 }
 
 func init() {
@@ -66,7 +67,9 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 		settings.Unmarshal(broke)
 	}
 
-	opts := mqtt.NewClientOptions().AddBroker(broke.Endpoint).SetClientID(broke.ClientID)
+	opts := mqtt.NewClientOptions().AddBroker(broke.Endpoint).
+		SetClientID(broke.ClientID).
+		SetCleanSession(broke.Cleansession)
 
 	opts.OnConnectionLost = func(c mqtt.Client, err error) {
 		logger.Error("connection lost", zap.Error(err))

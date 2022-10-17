@@ -34,7 +34,7 @@ func CreateSchedule(jobname, schedule string, cmd func(), logger *zap.Logger) (*
 	entries := cr.Entries()
 	nextRuntime := entries[0].Next
 
-	logger.Debug("cron job scheduled", zap.String("schedule", schedule), zap.Time("next", nextRuntime))
+	logger.Debug("cron job scheduled", zap.String("job", jobname), zap.String("schedule", schedule), zap.Time("next", nextRuntime))
 
 	return cr, nil
 }
