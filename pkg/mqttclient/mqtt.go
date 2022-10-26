@@ -91,6 +91,6 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 
 	broke.Client = c
 
-	logger.Debug("mqtt init done.", zap.String("endpoint", broke.Endpoint))
+	logger.Info("mqtt init done.", zap.String("endpoint", broke.Endpoint), zap.Bool("cleansession", broke.Cleansession))
 	return broke, nil
 }
