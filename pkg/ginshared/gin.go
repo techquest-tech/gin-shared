@@ -79,7 +79,7 @@ func Start() error {
 	// core.Container.Provide(NewService)
 	err := core.Container.Invoke(func(p Params) (err error) {
 		PrintVersion()
-		viper.SetDefault(KeyAddress, ":5000")
+		viper.SetDefault(KeyAddress, ":5001")
 
 		address := viper.GetString(KeyAddress)
 
