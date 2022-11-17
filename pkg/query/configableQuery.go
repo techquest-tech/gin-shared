@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/auth"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
+	"github.com/techquest-tech/gin-shared/pkg/orm"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -15,6 +16,7 @@ import (
 type RawQuerySerice struct {
 	db          *gorm.DB
 	logger      *zap.Logger
+	Source      string
 	EnabledAuth bool
 	Base        string
 	Items       []SerivceItem
@@ -30,18 +32,22 @@ func init() {
 	ginshared.GetContainer().Provide(initRawQuery, ginshared.ControllerOptions)
 }
 
-func initRawQuery(db *gorm.DB, logger *zap.Logger, router *gin.Engine, authservice *auth.AuthService) ginshared.DiController {
+func initRawQuery(logger *zap.Logger, router *gin.Engine, authservice *auth.AuthService) ginshared.DiController {
 	settings := viper.Sub("Queries")
 	if settings == nil {
+		logger.Warn("not queries in config files, ignored.")
 		return nil
 	}
 	serivce := &RawQuerySerice{
-		db:          db,
 		logger:      logger,
 		EnabledAuth: true,
 	}
 
 	settings.Unmarshal(serivce)
+
+	//init DB connections.
+	dbsettings := serivce.Source
+	serivce.db = orm.InitDB(dbsettings, logger)
 
 	logger.Debug("load query defines done", zap.Any("service", serivce))
 
@@ -74,6 +80,7 @@ func readParams(c *gin.Context) map[string]interface{} {
 	for _, v := range c.Params {
 		allParams[v.Key] = v.Value
 	}
+
 	for k, v := range c.Request.URL.Query() {
 		if len(v) == 1 {
 			allParams[k] = v[0]
@@ -88,7 +95,7 @@ func readParams(c *gin.Context) map[string]interface{} {
 func (service *RawQuerySerice) handleDetails(header, details RawQuery) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		p := readParams(c)
-		result := make(map[string]interface{})
+		result := map[string]interface{}{}
 		r, err := header.Query(service.db, p)
 		if err != nil {
 			service.logger.Error("read header information failed.", zap.Error(err), zap.String("sql", header.Sql))
