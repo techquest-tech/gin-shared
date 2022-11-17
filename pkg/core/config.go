@@ -25,10 +25,11 @@ func InitConfig() {
 	viper.AddConfigPath("../config")
 	viper.AddConfigPath("/etc/gin")
 	viper.AddConfigPath("$HOME/.gin")
+	viper.AddConfigPath(".")
 
 	err := viper.ReadInConfig()
 	if err != nil {
-		panic(fmt.Errorf("fatal error config file: %w", err))
+		log.Printf("WARN! read config failed. %+v", err)
 	}
 
 	envfile := os.Getenv("ENV")
@@ -44,8 +45,8 @@ func InitConfig() {
 			// 	zap.String("env", envfile),
 			// 	zap.Any("error", err),
 			// )
-			log.Fatalf("error while load env profile %s. %v", envfile, err)
-			panic(err)
+			log.Printf("WARN! error while load env profile %s. %v", envfile, err)
+			// panic(err)
 		}
 		result := profileConfig.AllSettings()
 		viper.MergeConfigMap(result)
