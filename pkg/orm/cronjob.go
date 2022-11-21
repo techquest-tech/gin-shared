@@ -33,7 +33,7 @@ func init() {
 	ginshared.GetContainer().Provide(func(logger *zap.Logger, db *gorm.DB) (ginshared.DiController, error) {
 		sub := viper.Sub("cronjob")
 		if sub == nil {
-			logger.Debug("not DB job is scheduled.")
+			logger.Info("not DB job is scheduled.")
 			return nil, nil
 		}
 

@@ -1,6 +1,8 @@
 package orm
 
 import (
+	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -9,6 +11,14 @@ var entities = make([]interface{}, 0)
 
 func AppendEntity(entity ...interface{}) {
 	entities = append(entities, entity...)
+}
+
+func ApplyMigrate() {
+	core.Container.Invoke(core.Container.Invoke(func(db *gorm.DB, logger *zap.Logger) {
+		if viper.GetBool(KeyInitDB) {
+			MigrateTableAndView(db, logger)
+		}
+	}))
 }
 
 func MigrateTableAndView(db *gorm.DB, logger *zap.Logger) {
