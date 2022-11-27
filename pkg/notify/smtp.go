@@ -1,7 +1,8 @@
-package email
+package notify
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"html/template"
 	"net/smtp"
@@ -15,6 +16,7 @@ type SmtpSettings struct {
 	Port     int
 	Username string
 	Password string
+	Tls      bool
 	auth     smtp.Auth
 }
 
@@ -37,6 +39,10 @@ type EmailNotifer struct {
 }
 
 func (en *EmailNotifer) PostInit() error {
+	if en.Logger == nil {
+		en.Logger = zap.L()
+	}
+
 	for _, item := range en.Template {
 		item.tSub = template.Must(template.New("sub").Parse(item.Subject))
 		item.tBody = template.Must(template.New("body").Parse(item.Body))
@@ -105,8 +111,12 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 	fullAddress := fmt.Sprintf("%s:%d", en.SMTP.Host, en.SMTP.Port)
 
 	en.Logger.Debug("start to send email", zap.String("smtp", fullAddress), zap.Strings("receivers", tmp.Receivers))
+	if en.SMTP.Tls {
+		err = e.SendWithTLS(fullAddress, en.SMTP.auth, &tls.Config{})
+	} else {
+		err = e.Send(fullAddress, en.SMTP.auth)
+	}
 
-	err = e.Send(fullAddress, en.SMTP.auth)
 	if err != nil {
 		en.Logger.Error("send email failed", zap.Error(err))
 		return err

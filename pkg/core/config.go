@@ -41,12 +41,9 @@ func InitConfig() {
 		profileConfig.AddConfigPath("../config")
 		err := profileConfig.ReadInConfig()
 		if err != nil {
-			// logger.Error("error while load env profile",
-			// 	zap.String("env", envfile),
-			// 	zap.Any("error", err),
-			// )
-			log.Printf("WARN! error while load env profile %s. %v", envfile, err)
-			// panic(err)
+			err = fmt.Errorf("load env profile %s failed, %w", envfile, err)
+			log.Println(err.Error())
+			panic(err)
 		}
 		result := profileConfig.AllSettings()
 		viper.MergeConfigMap(result)
