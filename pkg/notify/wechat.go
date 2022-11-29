@@ -34,7 +34,7 @@ type WechatNotifer struct {
 	CorpID     string
 	Secret     string
 	AgentID    string
-	Template   map[string]WechatTmpl
+	Template   map[string]*WechatTmpl
 	Logger     *zap.Logger
 	tokenCache *TokenCache
 }
@@ -83,7 +83,7 @@ func (wn *WechatNotifer) getToken() (string, error) {
 		"corpid":     {wn.CorpID},
 		"corpsecret": {wn.Secret},
 	}
-	req, _ := http.NewRequest("GET", p.Encode(), nil)
+	req, _ := http.NewRequest("GET", UrlGetToken+"?"+p.Encode(), nil)
 
 	result := TokenResp{}
 
