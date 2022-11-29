@@ -110,9 +110,13 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 	}
 	fullAddress := fmt.Sprintf("%s:%d", en.SMTP.Host, en.SMTP.Port)
 
-	en.Logger.Debug("start to send email", zap.String("smtp", fullAddress), zap.Strings("receivers", tmp.Receivers))
+	en.Logger.Debug("start to send email", zap.String("smtp", fullAddress),
+		zap.Strings("receivers", tmp.Receivers),
+		zap.Bool("TLS", en.SMTP.Tls),
+	)
 	if en.SMTP.Tls {
 		err = e.SendWithTLS(fullAddress, en.SMTP.auth, &tls.Config{})
+		// err = e.SendWithStartTLS(fullAddress, en.SMTP.auth, &tls.Config{})
 	} else {
 		err = e.Send(fullAddress, en.SMTP.auth)
 	}
