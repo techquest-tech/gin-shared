@@ -59,6 +59,7 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 	broke := &MqttService{
 		Endpoint: "tcp://127.0.0.1:1883",
 		Logger:   logger,
+		ClientID: core.AppName,
 		subs:     make(map[string]mqtt.MessageHandler),
 	}
 
