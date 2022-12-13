@@ -2,6 +2,7 @@ package mqttclient
 
 import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
@@ -66,6 +67,12 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 	settings := viper.Sub("mqtt")
 	if settings != nil {
 		settings.Unmarshal(broke)
+	}
+
+	if broke.ClientID == "" {
+		broke.ClientID = uuid.NewString()
+		broke.Cleansession = true
+		logger.Warn("MQTT clientID is empty, use UUID as clientID")
 	}
 
 	opts := mqtt.NewClientOptions().AddBroker(broke.Endpoint).
