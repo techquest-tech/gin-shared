@@ -122,7 +122,7 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 	}
 
 	if err != nil {
-		en.Logger.Error("send email failed", zap.Error(err))
+		en.Logger.Error("send email failed", zap.Error(err), zap.Strings("receivers", tmp.Receivers))
 		return err
 	}
 	en.Logger.Info("send email done.", zap.Strings("receivers", tmp.Receivers))
