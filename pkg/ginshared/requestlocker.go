@@ -15,6 +15,9 @@ func RequestLocker(params ...string) gin.HandlerFunc {
 		for _, item := range params {
 			key = key + ctx.Param(item)
 		}
+		if key == "" {
+			key = ctx.Request.RequestURI
+		}
 		_, ok := cache.LoadOrStore(key, true)
 		defer cache.Delete(key)
 		if ok {
