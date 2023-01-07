@@ -66,6 +66,7 @@ type Params struct {
 	Router      *gin.Engine
 	Bus         EventBus.Bus
 	Tls         *Tlssettings
+	Startups    []core.Startup `group:"startups"`
 	Controllers []DiController `group:"controllers"`
 }
 

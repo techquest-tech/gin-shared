@@ -20,6 +20,16 @@ func GetContainer() *dig.Container {
 	return Container
 }
 
+type Startup interface{}
+
+var StartupOptions = dig.Group("startups")
+
+func ProvideStartup(constructor ...any) {
+	for _, item := range constructor {
+		GetContainer().Provide(item, StartupOptions)
+	}
+}
+
 type Component interface {
 	Priority() int
 	OnEngineInited(r *gin.Engine) error
