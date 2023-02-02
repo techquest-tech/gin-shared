@@ -30,9 +30,7 @@ func init() {
 		}
 		authSetting := viper.Sub("auth")
 		if authSetting != nil {
-			if authService != nil {
-				authSetting.Unmarshal(authService)
-			}
+			authSetting.Unmarshal(authService)
 		}
 
 		if viper.GetBool(ginshared.KeyInitDB) {
@@ -41,7 +39,7 @@ func init() {
 
 		return authService
 	})
-	ginshared.GetContainer().Provide(NewRouterRequiredAuth)
+	ginshared.GetContainer().Provide(NewDefaultAuthedRouter)
 }
 
 type AuthKey struct {
@@ -146,7 +144,7 @@ func NewDefaultAuthedRouter(route *gin.Engine, auth *AuthService, logger *zap.Lo
 
 func NewURIAuthedRouter(route *gin.Engine, auth *AuthService, logger *zap.Logger, uri string) AuthedGroutRoute {
 	viper.SetDefault("baseUri", "/api/rfid")
-	viper.SetDefault("replyCode", 299)
+	viper.SetDefault("replyCode", 503)
 
 	fulluri := viper.GetString("baseUri")
 	if uri != "" {

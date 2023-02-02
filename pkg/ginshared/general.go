@@ -2,6 +2,7 @@ package ginshared
 
 import (
 	"fmt"
+	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
 	"github.com/techquest-tech/gin-shared/pkg/event"
@@ -39,6 +40,15 @@ func (handle *ReportError) RespErrorToClient(c *gin.Context, err interface{}) {
 func (handle *ReportError) Middleware(c *gin.Context) {
 	defer func() {
 		if err := recover(); err != nil {
+			// print panic stack
+			// buffer := make([]byte, 10240)
+			// n := runtime.Stack(buffer, false)
+			// fmt.Printf("recover from panic: \n %s", string(buffer[:n]))
+			fmt.Printf("recover from panic: \n %s", debug.Stack())
+
+			if _, ok := err.(error); !ok {
+				err = fmt.Errorf("%v", err)
+			}
 			if event.Bus != nil {
 				event.Bus.Publish(event.EventError, err)
 			}
