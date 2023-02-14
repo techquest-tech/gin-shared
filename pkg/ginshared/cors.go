@@ -1,5 +1,3 @@
-//go:build all || cors
-
 package ginshared
 
 import (
