@@ -1,6 +1,8 @@
 package orm
 
 import (
+	"fmt"
+
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
@@ -13,16 +15,22 @@ func AppendEntity(entity ...interface{}) {
 	entities = append(entities, entity...)
 }
 
-func ApplyMigrate() {
-	core.Container.Invoke(core.Container.Invoke(func(db *gorm.DB, logger *zap.Logger) {
+func ApplyMigrate() error {
+	return core.Container.Invoke(core.Container.Invoke(func(db *gorm.DB, logger *zap.Logger) {
 		if viper.GetBool(KeyInitDB) {
 			MigrateTableAndView(db, logger)
 		}
+		viper.Set(KeyInitDB, false) //just make sure the ApplyMigrate run once only
 	}))
 }
 
 func MigrateTableAndView(db *gorm.DB, logger *zap.Logger) {
 	logger.Info("init all tables")
+
+	for _, item := range entities {
+		name := fmt.Sprintf("%T", item)
+		zap.L().Info("applied entity", zap.String("entity", name))
+	}
 	err := db.AutoMigrate(entities...)
 	if err != nil {
 		logger.Error("init tables failed", zap.Error(err))
