@@ -9,9 +9,12 @@ import (
 // 	return zap.NewExample()
 // }
 
-func InitLogger() (*zap.Logger, error) {
+func InitLogger(p Bootup) (*zap.Logger, error) {
 
-	InitConfig()
+	err := InitConfig(p)
+	if err != nil {
+		return nil, err
+	}
 
 	settings := viper.Sub("log")
 

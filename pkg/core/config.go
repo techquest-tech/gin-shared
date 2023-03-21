@@ -1,36 +1,60 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
 
 	"github.com/spf13/viper"
+	"go.uber.org/dig"
 )
 
 var AppName = "RFID App"
 var Version = "latest"
 
-func InitConfig() {
+type ConfigYamlContent []byte
+
+type Bootup struct {
+	dig.In
+	EmbedConfig []ConfigYamlContent `group:"config"`
+}
+
+func ToEmbedConfig(content []byte) {
+	GetContainer().Provide(func() ConfigYamlContent { return content }, dig.Group("config"))
+}
+
+func InitConfig(p Bootup) error {
+	for _, item := range p.EmbedConfig {
+		configItem := viper.New()
+		configItem.SetConfigType("yaml")
+		err := configItem.ReadConfig(bytes.NewReader(item))
+		if err != nil {
+			fmt.Printf("read embed config failed. %v", err)
+			return err
+		}
+		viper.MergeConfigMap(configItem.AllSettings())
+	}
 
 	configName := os.Getenv("APP_CONFIG")
 	if configName == "" {
 		configName = "app"
 		fmt.Printf("user Config = %s", configName)
 	}
+	viperApp := viper.New()
+	viperApp.SetConfigName(configName)
+	viperApp.SetConfigType("yaml")
+	viperApp.AddConfigPath("config")
+	viperApp.AddConfigPath("../config")
+	viperApp.AddConfigPath("/etc/gin")
+	viperApp.AddConfigPath("$HOME/.gin")
+	viperApp.AddConfigPath(".")
 
-	viper.SetConfigName(configName)
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath("config")
-	viper.AddConfigPath("../config")
-	viper.AddConfigPath("/etc/gin")
-	viper.AddConfigPath("$HOME/.gin")
-	viper.AddConfigPath(".")
-
-	err := viper.ReadInConfig()
+	err := viperApp.ReadInConfig()
 	if err != nil {
 		log.Printf("WARN! read config failed. %+v", err)
 	}
+	viper.MergeConfigMap(viperApp.AllSettings())
 
 	envfile := os.Getenv("ENV")
 	if envfile != "" {
@@ -52,4 +76,5 @@ func InitConfig() {
 	}
 
 	log.Print("load config done.")
+	return nil
 }
