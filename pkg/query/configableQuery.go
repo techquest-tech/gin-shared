@@ -32,7 +32,7 @@ func init() {
 	ginshared.GetContainer().Provide(initRawQuery, ginshared.ControllerOptions)
 }
 
-func initRawQuery(logger *zap.Logger, router *gin.Engine, authservice *auth.AuthService) ginshared.DiController {
+func initRawQuery(logger *zap.Logger, router *gin.Engine, authservice *auth.AuthService, db *gorm.DB) ginshared.DiController {
 	settings := viper.Sub("Queries")
 	if settings == nil {
 		logger.Warn("not queries in config files, ignored.")
@@ -48,6 +48,10 @@ func initRawQuery(logger *zap.Logger, router *gin.Engine, authservice *auth.Auth
 	//init DB connections.
 	dbsettings := serivce.Source
 	serivce.db = orm.InitDB(dbsettings, logger)
+
+	if serivce.db == nil {
+		serivce.db = db
+	}
 
 	logger.Debug("load query defines done", zap.Any("service", serivce))
 
