@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/cache"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"github.com/techquest-tech/gin-shared/pkg/orm"
@@ -35,9 +36,11 @@ func init() {
 	// 	}
 	// })
 	core.GetContainer().Provide(func(ap AuthServiceParam) *AuthService {
+		c := cache.New[*AuthKey]()
 		authService := &AuthService{
-			Db:     ap.DB,
-			logger: ap.Logger,
+			Db:        ap.DB,
+			logger:    ap.Logger,
+			userCache: c,
 		}
 		authSetting := viper.Sub("auth")
 		if authSetting != nil {
@@ -63,9 +66,10 @@ type AuthKey struct {
 }
 
 type AuthService struct {
-	Db     *gorm.DB
-	logger *zap.Logger
-	Keys   []string
+	Db        *gorm.DB
+	logger    *zap.Logger
+	Keys      []string
+	userCache *cache.Cache[*AuthKey]
 }
 
 // const CheckSql = "SELECT id,remark from appusers a where a.IsDeleted = 0 and a.AppKey = ?"
@@ -90,14 +94,18 @@ func (a *AuthService) Validate(key string) (*AuthKey, bool) {
 		return nil, false
 	}
 
-	authkey := &AuthKey{}
-	err := a.Db.First(authkey, "api_key = ?", key).Error
+	authkey, found := a.userCache.Get(key)
+	if !found {
+		authkey = &AuthKey{}
+		err := a.Db.First(authkey, "api_key = ?", key).Error
 
-	if err != nil {
-		a.logger.Error("sql query error", zap.Any("error", err))
-		return nil, false
+		if err != nil {
+			a.logger.Error("sql query error", zap.Any("error", err))
+			return nil, false
+		}
+		a.logger.Debug("found in DB", zap.Uint("userID", authkey.ID))
+		a.userCache.Set(key, authkey)
 	}
-	a.logger.Debug("found in DB", zap.Uint("userID", authkey.ID))
 
 	if authkey.Suspend {
 		a.logger.Error("apiKey has been suspend", zap.String("apiKey", key))
