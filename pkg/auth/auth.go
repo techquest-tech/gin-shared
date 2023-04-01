@@ -28,7 +28,13 @@ const (
 
 func init() {
 	orm.AppendEntity(&AuthKey{})
-	ginshared.GetContainer().Provide(func(ap AuthServiceParam) *AuthService {
+	// core.Provide(func(db *gorm.DB, logger *zap.Logger) *AuthService {
+	// 	return &AuthService{
+	// 		Db:     db,
+	// 		logger: logger,
+	// 	}
+	// })
+	core.GetContainer().Provide(func(ap AuthServiceParam) *AuthService {
 		authService := &AuthService{
 			Db:     ap.DB,
 			logger: ap.Logger,
@@ -40,6 +46,7 @@ func init() {
 		// if viper.GetBool(ginshared.KeyInitDB) {
 		// 	ap.DB.AutoMigrate(&AuthKey{})
 		// }
+		ap.Logger.Info("api key service inited.")
 		return authService
 	})
 	ginshared.GetContainer().Provide(NewDefaultAuthedRouter)
@@ -64,7 +71,6 @@ type AuthService struct {
 // const CheckSql = "SELECT id,remark from appusers a where a.IsDeleted = 0 and a.AppKey = ?"
 
 func (a *AuthService) Validate(key string) (*AuthKey, bool) {
-
 	for _, k := range a.Keys {
 		if k == key {
 			a.logger.Debug("use build-in key")
@@ -97,7 +103,7 @@ func (a *AuthService) Validate(key string) (*AuthKey, bool) {
 		a.logger.Error("apiKey has been suspend", zap.String("apiKey", key))
 		return authkey, false
 	}
-	if authkey.Expiretion != nil && authkey.Expiretion.After(time.Now()) {
+	if authkey.Expiretion != nil && authkey.Expiretion.Before(time.Now()) {
 		a.logger.Error("apiKey is expired.", zap.String("apiKey", key), zap.Time("expiretion", *authkey.Expiretion))
 		return authkey, false
 	}
