@@ -1,12 +1,16 @@
 package auth
 
 import (
+	"math"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
+	"github.com/techquest-tech/gin-shared/pkg/orm"
 	"go.uber.org/dig"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -23,6 +27,7 @@ const (
 )
 
 func init() {
+	orm.AppendEntity(&AuthKey{})
 	ginshared.GetContainer().Provide(func(ap AuthServiceParam) *AuthService {
 		authService := &AuthService{
 			Db:     ap.DB,
@@ -32,11 +37,9 @@ func init() {
 		if authSetting != nil {
 			authSetting.Unmarshal(authService)
 		}
-
-		if viper.GetBool(ginshared.KeyInitDB) {
-			ap.DB.AutoMigrate(&AuthKey{})
-		}
-
+		// if viper.GetBool(ginshared.KeyInitDB) {
+		// 	ap.DB.AutoMigrate(&AuthKey{})
+		// }
 		return authService
 	})
 	ginshared.GetContainer().Provide(NewDefaultAuthedRouter)
@@ -44,44 +47,62 @@ func init() {
 
 type AuthKey struct {
 	gorm.Model
-	ApiKey string `gorm:"size:64"`
-	Owner  string `gorm:"size:64"`
-	Remark string `gorm:"size:64"`
+	ApiKey     string `gorm:"size:64"`
+	Owner      string `gorm:"size:64"`
+	Role       string `gorm:"size:64"`
+	Remark     string `gorm:"size:64"`
+	Suspend    bool
+	Expiretion *time.Time
 }
 
 type AuthService struct {
 	Db     *gorm.DB
 	logger *zap.Logger
-	// SQL    string
-	Keys []string
+	Keys   []string
 }
 
 // const CheckSql = "SELECT id,remark from appusers a where a.IsDeleted = 0 and a.AppKey = ?"
 
-func (a *AuthService) checkKey(key string) (uint, bool) {
+func (a *AuthService) Validate(key string) (*AuthKey, bool) {
 
 	for _, k := range a.Keys {
 		if k == key {
 			a.logger.Debug("use build-in key")
-			return 0, true
+			return &AuthKey{
+				Model: gorm.Model{
+					ID: math.MaxInt32 - 1,
+				},
+				ApiKey: key,
+				Owner:  core.AppName,
+				Role:   "admin",
+			}, true
 		}
 	}
 
 	if a.Db == nil {
 		a.logger.Warn("DB is not enabled for Auth service.")
-		return 0, false
+		return nil, false
 	}
 
-	authkey := AuthKey{}
-	err := a.Db.First(&authkey, "api_key = ?", key).Error
+	authkey := &AuthKey{}
+	err := a.Db.First(authkey, "api_key = ?", key).Error
 
 	if err != nil {
 		a.logger.Error("sql query error", zap.Any("error", err))
-		return 0, false
+		return nil, false
 	}
 	a.logger.Debug("found in DB", zap.Uint("userID", authkey.ID))
 
-	return authkey.ID, true
+	if authkey.Suspend {
+		a.logger.Error("apiKey has been suspend", zap.String("apiKey", key))
+		return authkey, false
+	}
+	if authkey.Expiretion != nil && authkey.Expiretion.After(time.Now()) {
+		a.logger.Error("apiKey is expired.", zap.String("apiKey", key), zap.Time("expiretion", *authkey.Expiretion))
+		return authkey, false
+	}
+	a.logger.Info("validate apiKey done")
+	return authkey, true
 }
 
 func (a *AuthService) Auth(c *gin.Context) {
@@ -107,8 +128,8 @@ func (a *AuthService) Auth(c *gin.Context) {
 		return
 	}
 
-	if id, ok := a.checkKey(key); ok {
-		c.Set(KeyUser, id)
+	if authkey, ok := a.Validate(key); ok {
+		c.Set(KeyUser, authkey.ID)
 		c.Next()
 	} else {
 		resp := ginshared.GeneralResp{
