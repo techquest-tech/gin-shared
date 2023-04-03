@@ -1,6 +1,9 @@
 package core
 
 import (
+	"os"
+	"strings"
+
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -28,21 +31,21 @@ func InitLogger(p Bootup) (*zap.Logger, error) {
 	level := zap.NewAtomicLevel()
 	level.UnmarshalText([]byte(settings.GetString("level")))
 
-	// env := strings.ToLower(os.Getenv("ENV"))
+	env := strings.ToLower(os.Getenv("ENV"))
 
-	// if env == "" {
-	// 	env = settings.GetString("env")
-	// }
+	if env == "" {
+		env = settings.GetString("env")
+	}
 
 	config := zap.NewDevelopmentConfig()
 
-	// switch env {
-	// case "prod", "prd", "uat":
-	// config = zap.NewProductionConfig()
+	switch env {
+	case "prod", "prd", "uat":
+		config = zap.NewProductionConfig()
 
-	// default:
-	// 	config = zap.NewDevelopmentConfig()
-	// }
+	default:
+		config = zap.NewDevelopmentConfig()
+	}
 
 	config.OutputPaths = []string{"stdout"}
 	config.Level.SetLevel(level.Level())

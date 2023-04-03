@@ -156,3 +156,10 @@ func (tr *TracingRequestService) LogfullRequestDetails(c *gin.Context) {
 
 	tr.Bus.Publish(event.EventTracing, fullLogging)
 }
+
+func EnabledTracing() {
+	core.Provide(InitTracingService)
+	core.ProvideStartup(func(t *TracingRequestService) core.Startup {
+		return t
+	})
+}
