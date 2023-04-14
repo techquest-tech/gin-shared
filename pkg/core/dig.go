@@ -71,3 +71,8 @@ func init() {
 		}
 	})
 }
+
+type OptionalParam[T any] struct {
+	dig.In
+	P T `optional:"true"`
+}
