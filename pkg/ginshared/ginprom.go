@@ -30,5 +30,5 @@ func (p Prom) OnEngineInited(r *gin.Engine) error {
 }
 
 func init() {
-	core.RegisterComponent(&Prom{})
+	RegisterComponent(&Prom{})
 }

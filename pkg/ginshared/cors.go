@@ -5,12 +5,11 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 )
 
 type CorsComponent struct {
-	core.DefaultComponent
+	DefaultComponent
 	Enabled bool
 }
 
@@ -41,5 +40,5 @@ func (c CorsComponent) OnEngineInited(r *gin.Engine) error {
 }
 
 func init() {
-	core.RegisterComponent(&CorsComponent{})
+	RegisterComponent(&CorsComponent{})
 }

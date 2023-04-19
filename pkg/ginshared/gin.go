@@ -21,7 +21,7 @@ const (
 	KeyInitDB  = "database.initDB"
 )
 
-func initEngine(logger *zap.Logger, bus EventBus.Bus, p *core.Components,
+func initEngine(logger *zap.Logger, bus EventBus.Bus, p *Components,
 	tls *Tlssettings) *gin.Engine {
 
 	router := gin.New()
