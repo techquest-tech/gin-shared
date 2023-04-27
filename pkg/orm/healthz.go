@@ -1,8 +1,6 @@
 package orm
 
 import (
-	"fmt"
-
 	"github.com/gin-gonic/gin"
 
 	"github.com/spf13/viper"
@@ -24,17 +22,18 @@ func (h *HealthController) Ping(c *gin.Context) {
 	statusCode := 200
 	statusMessage := "OK"
 
-	db, err := h.db.DB()
-	if err != nil {
-		statusCode = 500
-		statusMessage = fmt.Sprintf("connection to db failed. %v", err)
-	}
+	// db, err := h.db.DB()
+	// if err != nil {
+	// 	statusCode = 500
+	// 	statusMessage = fmt.Sprintf("connection to db failed. %v", err)
+	// }
+	// // defer db.
 
-	err = db.Ping()
-	if err != nil {
-		statusCode = 500
-		statusMessage = fmt.Sprintf("ping test failed. %v", err)
-	}
+	// err = db.Ping()
+	// if err != nil {
+	// 	statusCode = 500
+	// 	statusMessage = fmt.Sprintf("ping test failed. %v", err)
+	// }
 
 	c.JSON(statusCode, gin.H{"status": statusMessage})
 
