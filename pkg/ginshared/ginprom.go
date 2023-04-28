@@ -1,4 +1,4 @@
-//go:build prom || all
+// go:build prom || all
 
 package ginshared
 
@@ -6,12 +6,11 @@ import (
 	"github.com/Depado/ginprom"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
-	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 )
 
 type Prom struct {
-	core.DefaultComponent
+	DefaultComponent
 }
 
 func (p Prom) OnEngineInited(r *gin.Engine) error {

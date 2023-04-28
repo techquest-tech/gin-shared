@@ -5,12 +5,11 @@ package ginshared
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
-	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 )
 
 type IframeHeader struct {
-	core.DefaultComponent
+	DefaultComponent
 }
 
 func (t IframeHeader) OnEngineInited(r *gin.Engine) error {
@@ -26,5 +25,5 @@ func (t IframeHeader) OnEngineInited(r *gin.Engine) error {
 }
 
 func init() {
-	core.RegisterComponent(&IframeHeader{})
+	RegisterComponent(&IframeHeader{})
 }
