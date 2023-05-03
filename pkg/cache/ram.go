@@ -12,11 +12,15 @@ type Cache[T any] struct {
 	cc cache.Cache
 }
 
-func New[T any]() *Cache[T] {
+func NewWithTimeout[T any](dur time.Duration) *Cache[T] {
 	r := &Cache[T]{
-		cc: *cache.New(DefaultTimeout, 2*DefaultTimeout),
+		cc: *cache.New(dur, 2*dur),
 	}
 	return r
+}
+
+func New[T any]() *Cache[T] {
+	return (*Cache[T])(NewWithTimeout[T](DefaultTimeout))
 }
 
 func (ct *Cache[T]) Set(key string, value T) {
