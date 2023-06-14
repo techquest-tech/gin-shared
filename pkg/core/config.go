@@ -8,33 +8,42 @@ import (
 
 	"github.com/spf13/viper"
 	"go.uber.org/dig"
+	"go.uber.org/zap"
 )
 
 var AppName = "RFID App"
 var Version = "latest"
 
-type ConfigYamlContent []byte
+// type ConfigYamlContent []byte
 
 type Bootup struct {
 	dig.In
-	EmbedConfig []ConfigYamlContent `group:"config"`
+	// EmbedConfig []ConfigYamlContent `group:"config"`
 }
 
 func ToEmbedConfig(content []byte) {
-	GetContainer().Provide(func() ConfigYamlContent { return content }, dig.Group("config"))
+	configItem := viper.New()
+	configItem.SetConfigType("yaml")
+	err := configItem.ReadConfig(bytes.NewReader(content))
+	if err != nil {
+		fmt.Printf("read embed config failed. %v", err)
+		// return err
+	}
+	viper.MergeConfigMap(configItem.AllSettings())
+	zap.L().Warn("process preconfig yaml done, might overwrite some settings.", zap.Any("keys", configItem.AllKeys()))
 }
 
 func InitConfig(p Bootup) error {
-	for _, item := range p.EmbedConfig {
-		configItem := viper.New()
-		configItem.SetConfigType("yaml")
-		err := configItem.ReadConfig(bytes.NewReader(item))
-		if err != nil {
-			fmt.Printf("read embed config failed. %v", err)
-			return err
-		}
-		viper.MergeConfigMap(configItem.AllSettings())
-	}
+	// for _, item := range p.EmbedConfig {
+	// 	configItem := viper.New()
+	// 	configItem.SetConfigType("yaml")
+	// 	err := configItem.ReadConfig(bytes.NewReader(item))
+	// 	if err != nil {
+	// 		fmt.Printf("read embed config failed. %v", err)
+	// 		return err
+	// 	}
+	// 	viper.MergeConfigMap(configItem.AllSettings())
+	// }
 
 	configName := os.Getenv("APP_CONFIG")
 	if configName == "" {
