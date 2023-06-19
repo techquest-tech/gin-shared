@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // func defaultLoggerSettings() *zap.Logger {
@@ -42,12 +43,13 @@ func InitLogger(p Bootup) (*zap.Logger, error) {
 	switch env {
 	case "prod", "prd", "uat":
 		config = zap.NewProductionConfig()
-
+		config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	default:
 		config = zap.NewDevelopmentConfig()
 	}
 
 	config.OutputPaths = []string{"stdout"}
+
 	config.Level.SetLevel(level.Level())
 
 	if !settings.GetBool("trace") {
