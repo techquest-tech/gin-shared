@@ -3,6 +3,7 @@ package auth
 import (
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -78,12 +79,16 @@ func (a *AuthService) Validate(key string) (*AuthKey, bool) {
 	for _, k := range a.Keys {
 		if k == key {
 			a.logger.Debug("use build-in key")
+			owner := core.AppName
+			if index := strings.IndexByte(key, '-'); index > -1 {
+				owner = key[:index]
+			}
 			return &AuthKey{
 				Model: gorm.Model{
 					ID: math.MaxInt32 - 1,
 				},
 				ApiKey: key,
-				Owner:  core.AppName,
+				Owner:  owner,
 				Role:   "admin",
 			}, true
 		}
