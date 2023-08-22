@@ -1,7 +1,8 @@
 package auth
 
 import (
-	"math"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"strings"
 	"time"
@@ -58,7 +59,8 @@ func init() {
 
 type AuthKey struct {
 	gorm.Model
-	ApiKey     string `gorm:"size:64"`
+	UserName   string `gorm:"size:32"`
+	ApiKey     string `gorm:"size:64;index"`
 	Owner      string `gorm:"size:64"`
 	Role       string `gorm:"size:64"`
 	Remark     string `gorm:"size:64"`
@@ -73,24 +75,44 @@ type AuthService struct {
 	userCache *cache.Cache[*AuthKey]
 }
 
+func Hash(rawKey string) string {
+	hash := sha256.New()
+	hash.Write([]byte(rawKey))
+
+	hashed := hash.Sum(nil)
+
+	return hex.EncodeToString(hashed)
+}
+
 // const CheckSql = "SELECT id,remark from appusers a where a.IsDeleted = 0 and a.AppKey = ?"
 
 func (a *AuthService) Validate(key string) (*AuthKey, bool) {
-	for _, k := range a.Keys {
-		if k == key {
-			a.logger.Debug("use build-in key")
+	authkey, found := a.userCache.Get(key)
+
+	if found {
+		zap.L().Debug("authed apikey from cached. return true")
+		return authkey, true
+	}
+
+	hashed := Hash(key)
+
+	for index, k := range a.Keys {
+		if k == hashed {
+			a.logger.Debug("use build-in key(hashed)")
 			owner := core.AppName
-			if index := strings.IndexByte(key, '-'); index > -1 {
-				owner = key[:index]
+			if index := strings.IndexByte(hashed, '-'); index > -1 {
+				owner = hashed[:index]
 			}
-			return &AuthKey{
+			c := &AuthKey{
 				Model: gorm.Model{
-					ID: math.MaxInt32 - 1,
+					ID: uint(index),
 				},
-				ApiKey: key,
+				ApiKey: hashed,
 				Owner:  owner,
 				Role:   "admin",
-			}, true
+			}
+			a.userCache.Set(key, c)
+			return c, true
 		}
 	}
 
@@ -99,28 +121,29 @@ func (a *AuthService) Validate(key string) (*AuthKey, bool) {
 		return nil, false
 	}
 
-	authkey, found := a.userCache.Get(key)
 	if !found {
 		authkey = &AuthKey{}
-		err := a.Db.First(authkey, "api_key = ?", key).Error
+		err := a.Db.First(authkey, "api_key = ?", hashed).Error
 
 		if err != nil {
 			a.logger.Error("sql query error", zap.Any("error", err))
 			return nil, false
 		}
-		a.logger.Debug("found in DB", zap.Uint("userID", authkey.ID))
-		a.userCache.Set(key, authkey)
+		a.logger.Debug("found hashed key in DB", zap.Uint("userID", authkey.ID))
 	}
 
 	if authkey.Suspend {
-		a.logger.Error("apiKey has been suspend", zap.String("apiKey", key))
+		a.logger.Error("apiKey has been suspend", zap.String("apiKey", hashed))
 		return authkey, false
 	}
 	if authkey.Expiretion != nil && authkey.Expiretion.Before(time.Now()) {
-		a.logger.Error("apiKey is expired.", zap.String("apiKey", key), zap.Time("expiretion", *authkey.Expiretion))
+		a.logger.Error("apiKey is expired.", zap.String("apiKey", hashed), zap.Time("expiretion", *authkey.Expiretion))
 		return authkey, false
 	}
 	a.logger.Info("validate apiKey done")
+
+	a.userCache.Set(key, authkey)
+
 	return authkey, true
 }
 
