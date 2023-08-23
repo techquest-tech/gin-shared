@@ -19,6 +19,7 @@ require (
 	github.com/spf13/viper v1.16.0
 	github.com/tbaehler/gin-keycloak v1.5.1
 	github.com/techquest-tech/monitor v0.0.8
+	github.com/thanhpk/randstr v1.0.6
 	github.com/unrolled/secure v1.13.0
 	github.com/xhit/go-str2duration/v2 v2.1.0
 	go.uber.org/dig v1.17.0
