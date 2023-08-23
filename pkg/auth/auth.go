@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/cache"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"github.com/techquest-tech/gin-shared/pkg/orm"
+	"github.com/thanhpk/randstr"
 	"go.uber.org/dig"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -60,7 +60,7 @@ func init() {
 type AuthKey struct {
 	gorm.Model
 	UserName   string `gorm:"size:32"`
-	ApiKey     string `gorm:"size:64;index"`
+	ApiKey     string `gorm:"size:64;unique"`
 	Owner      string `gorm:"size:64"`
 	Role       string `gorm:"size:64"`
 	Remark     string `gorm:"size:64"`
@@ -185,18 +185,23 @@ func (a *AuthService) Auth(c *gin.Context) {
 	}
 }
 
-func (a *AuthService) CreateUser(owner, remark string) (string, error) {
-	u4 := uuid.New()
-	key := AuthKey{
-		ApiKey: u4.String(),
-		Owner:  owner,
-		Remark: remark,
+func (a *AuthService) CreateUser(owner, username, remark, rawKey string) (string, error) {
+	u4 := rawKey
+	if u4 == "" {
+		u4 = randstr.String(32)
+	}
+
+	key := &AuthKey{
+		ApiKey:   Hash(u4),
+		UserName: username,
+		Owner:    owner,
+		Remark:   remark,
 	}
 	err := a.Db.Save(key).Error
 	if err != nil {
 		return "", err
 	}
-	return key.ApiKey, nil
+	return u4, nil
 }
 
 type AuthedGroutRoute gin.IRoutes
