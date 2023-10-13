@@ -31,18 +31,14 @@ const (
 
 func init() {
 	orm.AppendEntity(&AuthKey{})
-	// core.Provide(func(db *gorm.DB, logger *zap.Logger) *AuthService {
-	// 	return &AuthService{
-	// 		Db:     db,
-	// 		logger: logger,
-	// 	}
-	// })
+
 	core.GetContainer().Provide(func(ap AuthServiceParam) *AuthService {
 		c := cache.New[*AuthKey]()
 		authService := &AuthService{
 			Db:        ap.DB,
 			logger:    ap.Logger,
 			userCache: c,
+			HeaderKey: "apiKey",
 		}
 		authSetting := viper.Sub("auth")
 		if authSetting != nil {
@@ -73,6 +69,7 @@ type AuthService struct {
 	logger    *zap.Logger
 	Keys      []string
 	userCache *cache.Cache[*AuthKey]
+	HeaderKey string
 }
 
 func Hash(rawKey string) string {
@@ -151,12 +148,12 @@ func (a *AuthService) Auth(c *gin.Context) {
 	key := ""
 	switch c.Request.Method {
 	case "GET":
-		key = c.Query("apiKey")
+		key = c.Query(a.HeaderKey)
 	default:
-		key = c.PostForm("apiKey")
+		key = c.PostForm(a.HeaderKey)
 	}
 	if key == "" {
-		key = c.GetHeader("apiKey")
+		key = c.GetHeader(a.HeaderKey)
 	}
 
 	if key == "" {
@@ -171,7 +168,7 @@ func (a *AuthService) Auth(c *gin.Context) {
 	}
 
 	if authkey, ok := a.Validate(key); ok {
-		c.Set(KeyUser, authkey.ID)
+		c.Set(KeyUser, authkey)
 		c.Next()
 	} else {
 		resp := ginshared.GeneralResp{
