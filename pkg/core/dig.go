@@ -1,12 +1,26 @@
 package core
 
 import (
+	"os"
+
 	"go.uber.org/dig"
 )
 
 var Container = dig.New()
 
+const (
+	NO_INIT = "_scm_no_init"
+)
+
+func Ignored() bool {
+	noinit := os.Getenv(NO_INIT)
+	return noinit == ""
+}
+
 func Provide(constructor ...interface{}) {
+	if Ignored() {
+		return
+	}
 	for _, item := range constructor {
 		GetContainer().Provide(item)
 	}
