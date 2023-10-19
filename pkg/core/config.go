@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 	"go.uber.org/dig"
@@ -22,7 +23,7 @@ type Bootup struct {
 	// EmbedConfig []ConfigYamlContent `group:"config"`
 }
 
-var embedcache = viper.New()
+var embedcache map[string]*viper.Viper = make(map[string]*viper.Viper)
 
 func embedGenerated() bool {
 	_, err := os.Stat(filepath.Join(ConfigFolder, EmbedConfigFile+".yaml"))
@@ -35,11 +36,7 @@ func embedGenerated() bool {
 	return true
 }
 
-func ToEmbedConfig(content []byte) {
-	if embedGenerated() {
-		// zap.L().Debug("embed file generated. content should be migirated.")
-		return
-	}
+func ToEmbedConfig(content []byte, keys ...string) {
 	configItem := viper.New()
 	configItem.SetConfigType("yaml")
 	err := configItem.ReadConfig(bytes.NewReader(content))
@@ -47,35 +44,61 @@ func ToEmbedConfig(content []byte) {
 		fmt.Printf("read embed config failed. %v", err)
 	}
 	cf := configItem.AllSettings()
-	viper.MergeConfigMap(cf)
-	embedcache.MergeConfigMap(cf)
 
-	zap.L().Warn("process preconfig yaml done, might overwrite some settings.", zap.Any("keys", configItem.AllKeys()))
+	// embedcache.MergeConfigMap(cf)
+	configKey := strings.Join(keys, "-")
+	embed, ok := embedcache[configKey]
+	if !ok {
+		embed = configItem
+	} else {
+		embed.MergeConfigMap(cf)
+	}
+	embedcache[configKey] = embed
 
+	if !embedGenerated() {
+		viper.MergeConfigMap(cf)
+		zap.L().Warn("process preconfig yaml done, might overwrite some settings.", zap.Any("keys", configItem.AllKeys()))
+	}
 }
 
 func GenerateEmbedConfigfile() error {
-	return embedcache.SafeWriteConfigAs(filepath.Join(ConfigFolder, EmbedConfigFile+".yaml"))
+	for k, v := range embedcache {
+		filename := EmbedConfigFile + ".yaml"
+		if k != "" {
+			filename = fmt.Sprintf("%s-%s.yaml", EmbedConfigFile, k)
+		}
+		err := v.WriteConfigAs(filepath.Join(ConfigFolder, filename))
+		if err != nil {
+			return err
+		}
+		zap.L().Info("write config file done", zap.String("configFile", filename))
+	}
+	return nil
 }
 
-func loadConfig(configname string) *viper.Viper {
+func loadConfig(configname string) error {
 	profileConfig := viper.New()
 	profileConfig.SetConfigName(configname)
 	profileConfig.SetConfigType("yaml")
 	profileConfig.AddConfigPath(ConfigFolder)
 	profileConfig.AddConfigPath(".")
-	return profileConfig
+
+	err := profileConfig.ReadInConfig()
+	if err != nil {
+		log.Printf("load %s failed. %v", configname, err)
+		return err
+	}
+	viper.MergeConfigMap(profileConfig.AllSettings())
+	log.Println(configname + " config loaded.")
+	return nil
 }
 
 func InitConfig(p Bootup) error {
 	if embedGenerated() {
-		embed := loadConfig(EmbedConfigFile)
-		err := embed.ReadInConfig()
+		err := loadConfig(EmbedConfigFile)
 		if err != nil {
 			return err
 		}
-		viper.MergeConfigMap(embed.AllSettings())
-		log.Println("embed config loaded.")
 	}
 
 	configName := os.Getenv("APP_CONFIG")
@@ -83,27 +106,16 @@ func InitConfig(p Bootup) error {
 		configName = "app"
 		log.Printf("user Config = %s", configName)
 	}
-	viperApp := loadConfig(configName)
 
-	err := viperApp.ReadInConfig()
+	err := loadConfig(configName)
 	if err != nil {
-		log.Printf("WARN! read config failed. %+v", err)
+		return err
 	}
-	viper.MergeConfigMap(viperApp.AllSettings())
-
 	envfile := os.Getenv("ENV")
 	if envfile != "" {
-		profileConfig := loadConfig(envfile)
-		err := profileConfig.ReadInConfig()
-		if err != nil {
-			err = fmt.Errorf("load env profile %s failed, %w", envfile, err)
-			log.Println(err.Error())
-			panic(err)
-		}
-		result := profileConfig.AllSettings()
-		viper.MergeConfigMap(result)
-		// logger.Debug("env profile loaded.", zap.Any("result", result), zap.String("env", envfile))
-		log.Printf("env profile %s loaded", envfile)
+		//load embed_envfile first
+		loadConfig(EmbedConfigFile + "-" + envfile) //allow config file missing
+		loadConfig(envfile)
 	}
 
 	log.Print("load config done.")
