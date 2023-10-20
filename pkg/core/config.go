@@ -73,6 +73,9 @@ func GenerateEmbedConfigfile() error {
 		}
 		zap.L().Info("write config file done", zap.String("configFile", filename))
 	}
+	if len(embedcache) == 0 {
+		zap.L().Info("no config file generated.")
+	}
 	return nil
 }
 

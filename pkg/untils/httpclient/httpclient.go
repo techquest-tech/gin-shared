@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/avast/retry-go"
-	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/event"
 	"github.com/techquest-tech/monitor"
 	"go.uber.org/zap"
@@ -36,8 +35,8 @@ func RequestWithRetry(req *http.Request, result interface{}, body ...string) err
 				Durtion:    time.Since(start),
 				Status:     resp.StatusCode,
 				Resp:       string(cached),
-				App:        core.AppName,
-				Version:    core.Version,
+				// App:        core.AppName,
+				// Version:    core.Version,
 			}
 			event.Bus.Publish(event.EventTracing, fulllogging)
 		}
