@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"github.com/techquest-tech/gin-shared/pkg/schedule"
 	str2duration "github.com/xhit/go-str2duration/v2"
@@ -83,10 +84,10 @@ func (cs *CleanupService) Cleanup(req *DBCleanupReq) error {
 }
 
 func InitScheduleCleanupJob(settingkey string) interface{} {
-	return func(logger *zap.Logger, cleanupService *CleanupService) ginshared.DiController {
+	return func(logger *zap.Logger, cleanupService *CleanupService) core.Startup {
 		settings := viper.Sub(settingkey)
 		if settings == nil {
-			logger.Info("cleanup job is not scheduled.")
+			logger.Debug("cleanup job is not scheduled")
 			return nil
 		}
 		schedulestr := settings.GetString("schedule")
@@ -143,5 +144,5 @@ func init() {
 		cs.RegConnection("default", db)
 		return cs
 	})
-	ginshared.ProvideController(InitScheduleCleanupJob("cleanup"))
+	core.ProvideStartup(InitScheduleCleanupJob("cleanup"))
 }
