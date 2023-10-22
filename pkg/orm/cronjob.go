@@ -44,7 +44,7 @@ func InitDBCronJob(logger *zap.Logger, db *gorm.DB) (core.Startup, error) {
 			Sql:      sub.GetStringSlice(key + ".Sql"),
 		}
 		if item.Schedule != "-" && len(item.Sql) > 0 {
-			err := schedule.CreateSchedule(item.Name, item.Schedule, item.FireJob, item.logger)
+			err := schedule.CreateSchedule(item.Name, item.Schedule, item.FireJob)
 			if err != nil {
 				item.logger.Error("start up schedule failed.", zap.Error(err))
 				return nil, err

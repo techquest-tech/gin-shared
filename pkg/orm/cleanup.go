@@ -101,7 +101,7 @@ func InitScheduleCleanupJob(settingkey string) interface{} {
 
 		schedule.CreateSchedule("database_cleanup", schedulestr, func() {
 			cleanupService.Cleanup(req)
-		}, logger)
+		})
 
 		return nil
 	}

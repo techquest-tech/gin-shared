@@ -9,6 +9,8 @@ import (
 	"gorm.io/gorm"
 )
 
+var ScheduleLockerEnabled = true
+
 type CronZaplog struct {
 	logger *zap.Logger
 }
@@ -31,13 +33,13 @@ type JobParams struct {
 	Bus    EventBus.Bus `optional:"true"`
 }
 
-func CreateSchedule(jobname, schedule string, cmd func(), aa ...any) error {
+func CreateSchedule(jobname, schedule string, cmd func()) error {
 	err := core.GetContainer().Invoke(func(p JobParams) error {
 		l := &CronZaplog{
 			logger: p.Logger,
 		}
 		opts := []cron.JobWrapper{cron.Recover(l), cron.SkipIfStillRunning(l)}
-		if p.DB != nil {
+		if ScheduleLockerEnabled && p.DB != nil {
 			locker := &ScheduleLoker{
 				DB:     p.DB,
 				Logger: p.Logger,
@@ -48,7 +50,7 @@ func CreateSchedule(jobname, schedule string, cmd func(), aa ...any) error {
 			}
 			opts = append(opts, locker.Wrapper())
 		}
-		cr := cron.New(cron.WithSeconds(), cron.WithChain(opts...))
+		cr := cron.New(cron.WithChain(opts...))
 		item, err := cr.AddFunc(schedule, cmd)
 		if err != nil {
 			return err
@@ -62,21 +64,4 @@ func CreateSchedule(jobname, schedule string, cmd func(), aa ...any) error {
 		zap.L().Error("schedule job failed.", zap.String("job", jobname), zap.Error(err))
 	}
 	return err
-	// logger := zap.L()
-	// l := &CronZaplog{
-	// 	logger: logger,
-	// }
-	// cr := cron.New(cron.WithChain(cron.Recover(l), cron.SkipIfStillRunning(l)))
-	// _, err := cr.AddFunc(schedule, cmd)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// cr.Start()
-
-	// entries := cr.Entries()
-	// nextRuntime := entries[0].Next
-
-	// logger.Debug("cron job scheduled", zap.String("job", jobname), zap.String("schedule", schedule), zap.Time("next", nextRuntime))
-
-	// return cr, nil
 }
