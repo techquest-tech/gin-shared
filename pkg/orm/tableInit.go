@@ -3,8 +3,10 @@ package orm
 import (
 	"fmt"
 
+	"github.com/asaskevich/EventBus"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
+	"github.com/techquest-tech/gin-shared/pkg/schedule"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -16,15 +18,15 @@ func AppendEntity(entity ...interface{}) {
 }
 
 func ApplyMigrate() error {
-	return core.Container.Invoke(core.Container.Invoke(func(db *gorm.DB, logger *zap.Logger) {
+	return core.Container.Invoke(core.Container.Invoke(func(db *gorm.DB, logger *zap.Logger, bus core.OptionalParam[EventBus.Bus]) {
 		if viper.GetBool(KeyInitDB) {
-			MigrateTableAndView(db, logger)
+			MigrateTableAndView(db, logger, bus.P)
 		}
 		viper.Set(KeyInitDB, false) //just make sure the ApplyMigrate run once only
 	}))
 }
 
-func MigrateTableAndView(db *gorm.DB, logger *zap.Logger) {
+func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus) {
 	logger.Info("init all tables")
 
 	for _, item := range entities {
@@ -35,6 +37,9 @@ func MigrateTableAndView(db *gorm.DB, logger *zap.Logger) {
 	if err != nil {
 		logger.Error("init tables failed", zap.Error(err))
 	} else {
+		if bus != nil {
+			bus.Publish("sys.db.inited")
+		}
 		logger.Info("init tables done")
 	}
 
@@ -44,5 +49,8 @@ func MigrateTableAndView(db *gorm.DB, logger *zap.Logger) {
 	} else {
 		logger.Info("init views done.")
 	}
+}
 
+func init() {
+	AppendEntity(&schedule.JobSchedule{})
 }
