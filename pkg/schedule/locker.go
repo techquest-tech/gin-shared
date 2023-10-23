@@ -16,7 +16,7 @@ type JobSchedule struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	Schedule     string `gorm:"size:32"`
-	LastRuntime  time.Time
+	LastRuntime  *time.Time
 	LastDuration time.Duration
 }
 
@@ -42,9 +42,9 @@ func (sl *ScheduleLoker) Create(name, schedule string) error {
 			if sh.UpdatedAt.IsZero() {
 				sh.UpdatedAt = time.Now()
 			}
-			if sh.LastRuntime.IsZero() {
-				sh.LastRuntime = time.Now()
-			}
+			// if sh.LastRuntime.IsZero() {
+			// 	sh.LastRuntime = time.Date(1)
+			// }
 			err = sl.DB.Save(sh).Error
 			if err != nil {
 				sl.Logger.Error("save job record failed.")
