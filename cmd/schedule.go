@@ -20,6 +20,7 @@ var ScheduleCmd = &cobra.Command{
 	Short: "start the schedule job only",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return core.GetContainer().Invoke(func(p Schedule) error {
+			core.NotifyStarted()
 			CloseOnlyNotified()
 			return nil
 		})

@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
-	"github.com/techquest-tech/gin-shared/pkg/event"
 	"go.uber.org/dig"
 	"go.uber.org/zap"
 )
@@ -36,7 +35,7 @@ func initEngine(logger *zap.Logger, bus EventBus.Bus, p *Components,
 
 	p.InitAll(router)
 
-	bus.Publish(event.EventInit, router)
+	bus.Publish(core.EventInit, router)
 
 	logger.Info("router engine inited.")
 
@@ -87,6 +86,7 @@ func Start() error {
 		if len(p.Controllers) == 0 {
 			return fmt.Errorf("no controller available")
 		}
+
 		if p.Tls.Enabled {
 			err = p.Router.RunTLS(address, p.Tls.Pem, p.Tls.Key)
 		} else {
@@ -99,7 +99,7 @@ func Start() error {
 		}
 
 		p.Logger.Info("app is stopping")
-		p.Bus.Publish(event.EventStopping)
+		p.Bus.Publish(core.EventStopping)
 		p.Logger.Info("stopped.")
 		return nil
 	})

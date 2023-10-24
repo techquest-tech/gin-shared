@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/avast/retry-go"
-	"github.com/techquest-tech/gin-shared/pkg/event"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/monitor"
 	"go.uber.org/zap"
 )
@@ -26,7 +26,7 @@ func RequestWithRetry(req *http.Request, result interface{}, body ...string) err
 
 		cached, err := io.ReadAll(resp.Body)
 
-		if event.Bus != nil && len(body) > 0 {
+		if core.Bus != nil && len(body) > 0 {
 			fulllogging := &monitor.TracingDetails{
 				Optionname: req.URL.String(),
 				Uri:        req.URL.String(),
@@ -38,7 +38,7 @@ func RequestWithRetry(req *http.Request, result interface{}, body ...string) err
 				// App:        core.AppName,
 				// Version:    core.Version,
 			}
-			event.Bus.Publish(event.EventTracing, fulllogging)
+			core.Bus.Publish(core.EventTracing, fulllogging)
 		}
 
 		if err != nil {

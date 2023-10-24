@@ -5,7 +5,7 @@ import (
 	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
-	"github.com/techquest-tech/gin-shared/pkg/event"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 )
 
@@ -49,8 +49,8 @@ func (handle *ReportError) Middleware(c *gin.Context) {
 			if _, ok := err.(error); !ok {
 				err = fmt.Errorf("%v", err)
 			}
-			if event.Bus != nil {
-				event.Bus.Publish(event.EventError, err)
+			if core.Bus != nil {
+				core.Bus.Publish(core.EventError, err)
 			}
 			handle.RespErrorToClient(c, err)
 		}
