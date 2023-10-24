@@ -87,6 +87,7 @@ func Start() error {
 			return fmt.Errorf("no controller available")
 		}
 
+		core.NotifyStarted()
 		if p.Tls.Enabled {
 			err = p.Router.RunTLS(address, p.Tls.Pem, p.Tls.Key)
 		} else {

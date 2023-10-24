@@ -10,9 +10,9 @@ var Bus EventBus.Bus
 const (
 	EventError    = "event.error"
 	EventTracing  = "event.tracing"
-	EventInit     = "event.gin.inited"
+	EventInit     = "event.gin.inited" //trigger when gin ready to service.
 	EventStopping = "event.gin.stopping"
-	EventStarted  = "sys.started"
+	EventStarted  = "sys.started" //trigger when all inited done.
 )
 
 func init() {
