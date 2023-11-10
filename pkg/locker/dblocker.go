@@ -45,9 +45,6 @@ func (dl *DbLocker) LockWithtimeout(ctx context.Context, resource string, timeou
 			return nil, err
 		}
 	} else {
-		glocker.Lock()
-		defer glocker.Unlock()
-
 		ll := &ResourceLocker{
 			Name:      resource,
 			CreatedAt: time.Now(),

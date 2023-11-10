@@ -41,8 +41,8 @@ func (sl *ScheduleLoker) Wrapper() cron.JobWrapper {
 }
 
 func init() {
-	core.Provide(locker.InitDBLocker)
-	core.Provide(func(l *locker.DbLocker) locker.Locker {
+	core.Provide(locker.InitRedisLocker)
+	core.Provide(func(l *locker.RedisLocker) locker.Locker {
 		return l
 	})
 }

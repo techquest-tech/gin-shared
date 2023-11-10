@@ -25,11 +25,17 @@ func (r *RedisLocker) Init() {
 	r.Logger.Info("redis locker ready.", zap.String("redis", r.RedisOptions.Addr))
 }
 
-func (r *RedisLocker) Lock(ctx context.Context, resource string) (Release, error) {
+func (r *RedisLocker) LockWithtimeout(ctx context.Context, resource string, timeout time.Duration) (Release, error) {
 	locker := redislock.New(r.client)
 	cnt := uint(0)
+	var opt *redislock.Options
+	if timeout > 0 {
+		opt = &redislock.Options{
+			RetryStrategy: redislock.LinearBackoff(timeout),
+		}
+	}
 	for {
-		lock, err := locker.Obtain(ctx, resource, r.Timeout, nil)
+		lock, err := locker.Obtain(ctx, resource, r.Timeout, opt)
 		if err != nil {
 			if err == redislock.ErrNotObtained {
 				cnt += 1
@@ -45,6 +51,10 @@ func (r *RedisLocker) Lock(ctx context.Context, resource string) (Release, error
 		}
 		return lock.Release, nil
 	}
+}
+
+func (r *RedisLocker) Lock(ctx context.Context, resource string) (Release, error) {
+	return r.LockWithtimeout(ctx, resource, 0)
 }
 
 func InitRedisLocker(logger *zap.Logger) *RedisLocker {

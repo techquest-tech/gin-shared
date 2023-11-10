@@ -2,24 +2,30 @@ package locker
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"time"
 )
 
-var glocker sync.Mutex
+// var glocker sync.Mutex
 
 type LocalLocker struct {
-	locker map[string]*sync.Mutex
+	locker sync.Map
+	ticker time.Duration
 }
 
 func (ml *LocalLocker) Lock(ctx context.Context, resource string) (Release, error) {
-	glocker.Lock()
-	defer glocker.Unlock()
-
-	locker, ok := ml.locker[resource]
+	// glocker.Lock()
+	// defer glocker.Unlock()
+	var locker *sync.Mutex
+	raw, ok := ml.locker.Load(resource)
 	if !ok {
 		locker = &sync.Mutex{}
-		ml.locker[resource] = locker
+		ml.locker.Store(resource, locker)
+	} else {
+		locker = raw.(*sync.Mutex)
 	}
+
 	locker.Lock()
 	return func(ctx context.Context) error {
 		locker.Unlock()
@@ -27,8 +33,36 @@ func (ml *LocalLocker) Lock(ctx context.Context, resource string) (Release, erro
 	}, nil
 }
 
+func (ml *LocalLocker) LockWithtimeout(ctx context.Context, resource string, timeout time.Duration) (Release, error) {
+	var locker *sync.Mutex
+	raw, ok := ml.locker.Load(resource)
+	if !ok {
+		locker = &sync.Mutex{}
+		ml.locker.Store(resource, locker)
+	} else {
+		locker = raw.(*sync.Mutex)
+	}
+
+	start := time.Now()
+	for {
+		ok := locker.TryLock()
+		if ok {
+			return func(ctx context.Context) error {
+				locker.Unlock()
+				return nil
+			}, nil
+		}
+		time.Sleep(ml.ticker)
+		dur := time.Since(start)
+		if dur > timeout {
+			return nil, errors.New("timeout")
+		}
+	}
+}
+
 func InitLocalLocker() *LocalLocker {
 	return &LocalLocker{
-		locker: make(map[string]*sync.Mutex),
+		locker: sync.Map{},
+		ticker: 10 * time.Millisecond,
 	}
 }
