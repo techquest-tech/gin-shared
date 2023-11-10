@@ -1,9 +1,8 @@
-package orm
+package schedule
 
 import (
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
-	"github.com/techquest-tech/gin-shared/pkg/schedule"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -45,7 +44,7 @@ func InitDBCronJob(logger *zap.Logger, db *gorm.DB) (core.Startup, error) {
 			Sql:      sub.GetStringSlice(key + ".sql"),
 		}
 		if item.Schedule != "-" && len(item.Sql) > 0 {
-			err := schedule.CreateSchedule(item.Name, item.Schedule, item.FireJob)
+			err := CreateSchedule(item.Name, item.Schedule, item.FireJob)
 			if err != nil {
 				item.logger.Error("start up schedule failed.", zap.Error(err))
 				return nil, err

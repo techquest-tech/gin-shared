@@ -24,7 +24,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
-	"github.com/techquest-tech/gin-shared/pkg/orm"
+	"github.com/techquest-tech/gin-shared/pkg/schedule"
 )
 
 var tables = make([]string, 0)
@@ -36,7 +36,7 @@ var CleanupCmd = &cobra.Command{
 	Use:   "dbcleanup",
 	Short: "run DB clean up",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ginshared.GetContainer().Invoke(orm.DoCleanup("cleanup", tables, col, duration))
+		return ginshared.GetContainer().Invoke(schedule.DoCleanup("cleanup", tables, col, duration))
 	},
 }
 

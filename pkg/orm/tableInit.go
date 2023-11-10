@@ -6,7 +6,6 @@ import (
 	"github.com/asaskevich/EventBus"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
-	"github.com/techquest-tech/gin-shared/pkg/schedule"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -51,6 +50,6 @@ func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus) {
 	}
 }
 
-func init() {
-	AppendEntity(&schedule.JobSchedule{})
-}
+// func init() {
+// 	AppendEntity(&schedule.JobSchedule{})
+// }

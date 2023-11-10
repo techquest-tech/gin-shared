@@ -26,12 +26,19 @@ type DbLocker struct {
 	cache  map[string]bool
 }
 
-func (dl *DbLocker) Lock(ctx context.Context, resource string) (Release, error) {
+func (dl *DbLocker) LockWithtimeout(ctx context.Context, resource string, timeout time.Duration) (Release, error) {
 	tx := dl.DB.Begin()
+
+	var cancel context.CancelFunc
 
 	_, ok := dl.cache[resource]
 	if ok {
 		n := time.Now()
+		if timeout > 0 {
+			nctx, c := context.WithTimeout(ctx, timeout)
+			cancel = c
+			tx = tx.WithContext(nctx)
+		}
 		err := tx.Model(&ResourceLocker{}).Where("name = ?", resource).Update("updated_at", n).Error
 		if err != nil {
 			tx.Rollback()
@@ -58,8 +65,15 @@ func (dl *DbLocker) Lock(ctx context.Context, resource string) (Release, error) 
 	return func(ctx context.Context) error {
 		tx.Commit()
 		dl.Logger.Debug("release locker done", zap.String("resource", resource))
+		if cancel != nil {
+			cancel()
+		}
 		return nil
 	}, nil
+}
+
+func (dl *DbLocker) Lock(ctx context.Context, resource string) (Release, error) {
+	return dl.LockWithtimeout(ctx, resource, 0)
 }
 
 func InitDBLocker(p common.ServiceParam) *DbLocker {

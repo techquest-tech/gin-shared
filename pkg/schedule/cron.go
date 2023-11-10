@@ -4,6 +4,7 @@ import (
 	"github.com/asaskevich/EventBus"
 	"github.com/robfig/cron/v3"
 	"github.com/techquest-tech/gin-shared/pkg/core"
+	"github.com/techquest-tech/gin-shared/pkg/locker"
 	"go.uber.org/dig"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -34,19 +35,16 @@ type JobParams struct {
 }
 
 func CreateSchedule(jobname, schedule string, cmd func()) error {
-	err := core.GetContainer().Invoke(func(p JobParams) error {
+	err := core.GetContainer().Invoke(func(p JobParams, pp core.OptionalParam[locker.Locker]) error {
 		l := &CronZaplog{
 			logger: p.Logger,
 		}
 		opts := []cron.JobWrapper{cron.Recover(l), cron.SkipIfStillRunning(l)}
-		if ScheduleLockerEnabled && p.DB != nil {
+		if ScheduleLockerEnabled && pp.P != nil {
 			locker := &ScheduleLoker{
-				DB:     p.DB,
-				Logger: p.Logger,
-			}
-			err := locker.Create(jobname, schedule)
-			if err != nil {
-				return err
+				Locker:  pp.P,
+				Bus:     p.Bus,
+				Jobname: jobname,
 			}
 			opts = append(opts, locker.Wrapper())
 		}

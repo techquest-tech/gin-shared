@@ -1,4 +1,4 @@
-package orm
+package schedule
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
-	"github.com/techquest-tech/gin-shared/pkg/schedule"
+	"github.com/techquest-tech/gin-shared/pkg/orm"
 	str2duration "github.com/xhit/go-str2duration/v2"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -67,7 +67,7 @@ func (cs *CleanupService) Cleanup(req *DBCleanupReq) error {
 		done := false
 		for i := 0; !done; i++ {
 			cs.logger.Info("delete row", zap.String("table", t), zap.Int("from", i*req.Batch+1), zap.Int("to", (i+1)*req.Batch))
-			result := db.Session(SessionWithConfig(60*time.Second, true)).Exec(sql, starttime, req.Batch)
+			result := db.Session(orm.SessionWithConfig(60*time.Second, true)).Exec(sql, starttime, req.Batch)
 			if result.Error != nil {
 				cs.logger.Error("delete data failed", zap.Error(result.Error))
 				return fmt.Errorf("delete data failed. %v", result.Error)
@@ -99,7 +99,7 @@ func InitScheduleCleanupJob(settingkey string) interface{} {
 		req := cleanupService.GetDefaultRequest()
 		settings.Unmarshal(req)
 
-		schedule.CreateSchedule("database_cleanup", schedulestr, func() {
+		CreateSchedule("database_cleanup", schedulestr, func() {
 			cleanupService.Cleanup(req)
 		})
 
