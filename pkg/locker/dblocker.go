@@ -1,9 +1,12 @@
+//go:build dblocker
+
 package locker
 
 import (
 	"context"
 	"time"
 
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/orm"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -73,10 +76,14 @@ func (dl *DbLocker) Lock(ctx context.Context, resource string) (Release, error) 
 	return dl.LockWithtimeout(ctx, resource, 0)
 }
 
-func InitDBLocker(p common.ServiceParam) *DbLocker {
+func InitDBLocker(p common.ServiceParam) Locker {
 	return &DbLocker{
 		DB:     p.DB,
 		Logger: p.Logger,
 		cache:  map[string]bool{},
 	}
+}
+
+func init() {
+	core.Provide(InitDBLocker)
 }

@@ -1,3 +1,5 @@
+//go:build redislocker
+
 package locker
 
 import (
@@ -8,6 +10,7 @@ import (
 	"github.com/bsm/redislock"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 )
 
@@ -57,7 +60,7 @@ func (r *RedisLocker) Lock(ctx context.Context, resource string) (Release, error
 	return r.LockWithtimeout(ctx, resource, 0)
 }
 
-func InitRedisLocker(logger *zap.Logger) *RedisLocker {
+func InitRedisLocker(logger *zap.Logger) Locker {
 	rd := &RedisLocker{
 		RedisOptions: &redis.Options{
 			Network: "tcp",
@@ -80,4 +83,8 @@ func InitRedisLocker(logger *zap.Logger) *RedisLocker {
 	}
 	rd.Init()
 	return rd
+}
+
+func init() {
+	core.Provide(InitRedisLocker)
 }

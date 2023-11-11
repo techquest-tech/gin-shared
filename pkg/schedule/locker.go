@@ -6,7 +6,6 @@ import (
 
 	"github.com/asaskevich/EventBus"
 	"github.com/robfig/cron/v3"
-	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/locker"
 	"go.uber.org/zap"
 )
@@ -38,11 +37,4 @@ func (sl *ScheduleLoker) Wrapper() cron.JobWrapper {
 			logger.Info("job done.", zap.Duration("duration", dur))
 		})
 	}
-}
-
-func init() {
-	core.Provide(locker.InitRedisLocker)
-	core.Provide(func(l *locker.RedisLocker) locker.Locker {
-		return l
-	})
 }

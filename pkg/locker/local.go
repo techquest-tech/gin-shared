@@ -1,3 +1,5 @@
+//go:build !redislocker || !dblocker
+
 package locker
 
 import (
@@ -5,6 +7,8 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/techquest-tech/gin-shared/pkg/core"
 )
 
 // var glocker sync.Mutex
@@ -60,9 +64,13 @@ func (ml *LocalLocker) LockWithtimeout(ctx context.Context, resource string, tim
 	}
 }
 
-func InitLocalLocker() *LocalLocker {
+func InitLocalLocker() Locker {
 	return &LocalLocker{
 		locker: sync.Map{},
 		ticker: 10 * time.Millisecond,
 	}
+}
+
+func init() {
+	core.Provide(InitLocalLocker)
 }
