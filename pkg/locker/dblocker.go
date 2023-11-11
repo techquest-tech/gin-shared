@@ -11,7 +11,6 @@ import (
 	"github.com/techquest-tech/gin-shared/pkg/orm"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"summationsolutions.com/rfid/scm/pkg/common"
 )
 
 type ResourceLocker struct {
@@ -95,10 +94,10 @@ func (dl *DbLocker) Lock(ctx context.Context, resource string) (Release, error) 
 	return dl.LockWithtimeout(ctx, resource, 0)
 }
 
-func InitDBLocker(p common.ServiceParam) Locker {
+func InitDBLocker(db *gorm.DB, logger *zap.Logger) Locker {
 	result := &DbLocker{
-		DB:     p.DB,
-		Logger: p.Logger,
+		DB:     db,
+		Logger: logger,
 		cache:  map[string]bool{},
 	}
 	result.init()
