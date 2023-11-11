@@ -1,4 +1,4 @@
-//go:build redislocker
+//go:build locker_redis
 
 package locker
 

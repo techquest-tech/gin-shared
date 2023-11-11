@@ -1,4 +1,4 @@
-//go:build !redislocker || !dblocker
+//go:build !locker_db && !locker_redis
 
 package locker
 

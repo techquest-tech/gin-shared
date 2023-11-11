@@ -11,6 +11,7 @@ import (
 )
 
 var ScheduleLockerEnabled = true
+var JobHistoryEnabled = true
 
 type CronZaplog struct {
 	logger *zap.Logger
@@ -40,6 +41,11 @@ func CreateSchedule(jobname, schedule string, cmd func()) error {
 			logger: p.Logger,
 		}
 		opts := []cron.JobWrapper{cron.Recover(l), cron.SkipIfStillRunning(l)}
+
+		if JobHistoryEnabled && p.Bus != nil {
+			opts = append(opts, Withhistory(p.Bus, jobname))
+		}
+
 		if ScheduleLockerEnabled && pp.P != nil {
 			locker := &ScheduleLoker{
 				Locker:  pp.P,

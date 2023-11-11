@@ -1,9 +1,10 @@
-//go:build dblocker
+//go:build locker_db
 
 package locker
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/techquest-tech/gin-shared/pkg/core"
@@ -29,6 +30,21 @@ type DbLocker struct {
 	cache  map[string]bool
 }
 
+var glocker sync.Mutex
+
+func (dl *DbLocker) init() error {
+	resources := make([]string, 0)
+	err := dl.DB.Model(&ResourceLocker{}).Select("name").Find(&resources).Error
+	if err != nil {
+		return err
+	}
+
+	for _, item := range resources {
+		dl.cache[item] = true
+	}
+	return nil
+}
+
 func (dl *DbLocker) LockWithtimeout(ctx context.Context, resource string, timeout time.Duration) (Release, error) {
 	tx := dl.DB.Begin()
 
@@ -48,6 +64,9 @@ func (dl *DbLocker) LockWithtimeout(ctx context.Context, resource string, timeou
 			return nil, err
 		}
 	} else {
+		glocker.Lock()
+		defer glocker.Unlock()
+
 		ll := &ResourceLocker{
 			Name:      resource,
 			CreatedAt: time.Now(),
@@ -77,11 +96,13 @@ func (dl *DbLocker) Lock(ctx context.Context, resource string) (Release, error) 
 }
 
 func InitDBLocker(p common.ServiceParam) Locker {
-	return &DbLocker{
+	result := &DbLocker{
 		DB:     p.DB,
 		Logger: p.Logger,
 		cache:  map[string]bool{},
 	}
+	result.init()
+	return result
 }
 
 func init() {

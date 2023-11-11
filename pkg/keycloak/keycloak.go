@@ -76,7 +76,7 @@ func NewKeycloakConfig(logger *zap.Logger) *KeycloakConfig {
 	config.BuildConfig = buildconfig
 	config.DefaultRoles = settings.GetStringSlice("roles")
 
-	logger.Info("load keycloak config", zap.Any("config", config))
+	logger.Info("load keycloak config", zap.Any("config", config.BuildConfig.Url))
 
 	return config
 }
