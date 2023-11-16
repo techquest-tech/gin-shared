@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/techquest-tech/gin-shared/pkg/auth"
 	"github.com/techquest-tech/gin-shared/pkg/core"
+	"github.com/thanhpk/randstr"
 )
 
 var (
@@ -24,6 +25,9 @@ var AdduserCmd = &cobra.Command{
 	Short: "add API key for owner",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return core.GetContainer().Invoke(func(auth *auth.AuthService) error {
+			if username == "" {
+				username = owner + "-user" + randstr.Dec(3)
+			}
 			key, err := auth.CreateUser(owner, username, remark, apikey)
 			if err != nil {
 				return err

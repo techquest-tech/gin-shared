@@ -40,18 +40,19 @@ func Withhistory(bus EventBus.Bus, jobname string) cron.JobWrapper {
 					if r := recover(); r != nil {
 						if err, ok := r.(error); ok {
 							task.Message = err.Error()
+							logger.Error("recover from panic", zap.Error(err), zap.String("job", task.Job))
 						} else if msg, ok := r.(string); ok {
 							task.Message = msg
+							logger.Info(msg)
 						}
 						task.Succeed = false
-						logger.Error("recover from panic", zap.Any("panic", r), zap.String("job", task.Job))
 					}
 					logger.Info("job done")
 
 					done := time.Now()
 					task.Duration = time.Since(task.Start)
 					task.Finished = done
-					logger.Debug("mark job end", zap.Duration("duration", task.Duration))
+					logger.Debug("job end", zap.Duration("duration", task.Duration))
 					if bus != nil {
 						bus.Publish(EventJobFinished, task)
 					}
