@@ -1,4 +1,4 @@
-//go:build !locker_db && !locker_redis
+//go:build !locker_db && !locker_redis && !redis
 
 package locker
 
