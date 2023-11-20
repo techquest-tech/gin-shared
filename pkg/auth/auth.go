@@ -84,19 +84,18 @@ func Hash(rawKey string) string {
 // const CheckSql = "SELECT id,remark from appusers a where a.IsDeleted = 0 and a.AppKey = ?"
 
 func (a *AuthService) Validate(key string) (*AuthKey, bool) {
-	authkey, found := a.userCache.Get(key)
+	hashed := Hash(key)
+	authkey, found := a.userCache.Get(hashed)
 
 	if found {
 		zap.L().Debug("authed apikey from cached. return true")
 		return authkey, true
 	}
 
-	hashed := Hash(key)
-
 	for index, k := range a.Keys {
 		if k == hashed {
 			a.logger.Debug("use build-in key(hashed)")
-			owner := core.AppName
+			owner := ""
 			if index := strings.IndexByte(hashed, '-'); index > -1 {
 				owner = hashed[:index]
 			}
@@ -108,7 +107,7 @@ func (a *AuthService) Validate(key string) (*AuthKey, bool) {
 				Owner:  owner,
 				Role:   "admin",
 			}
-			a.userCache.Set(key, c)
+			a.userCache.Set(hashed, c)
 			return c, true
 		}
 	}
@@ -139,7 +138,7 @@ func (a *AuthService) Validate(key string) (*AuthKey, bool) {
 	}
 	a.logger.Info("validate apiKey done")
 
-	a.userCache.Set(key, authkey)
+	a.userCache.Set(hashed, authkey)
 
 	return authkey, true
 }
