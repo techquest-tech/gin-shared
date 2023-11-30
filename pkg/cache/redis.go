@@ -16,16 +16,14 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewRedisClient() *redis.Client {
-
+func NewRedisClient(logger *zap.Logger) *redis.Client {
 	opts := &redis.Options{}
-
 	subRedis := viper.Sub("redis")
 	if subRedis != nil {
 		subRedis.Unmarshal(opts)
 	}
 	client := redis.NewClient(opts)
-	zap.L().Info("connected to redis", zap.String("redis", opts.Addr))
+	logger.Info("connected to redis", zap.String("redis", opts.Addr))
 	return client
 }
 
@@ -59,7 +57,7 @@ func NewCacheProvider[T any](t time.Duration) CacheProvider[T] {
 	})
 	if err != nil {
 		zap.L().Error("new cache provider failed.", zap.Error(err))
-		panic(err)
+		// panic(err)
 	}
 	return rr
 }
@@ -72,12 +70,15 @@ type RedisProvider[T any] struct {
 
 // Get implements CacheProvider.
 func (r *RedisProvider[T]) Get(key string) (T, bool) {
+	var value T
+	if r.cache == nil {
+		zap.L().Warn("redis cache is not functional now, ")
+		return value, false
+	}
 	k := r.prefix + key
 	zap.L().Debug("try to read value from redis", zap.String("key", k))
 
 	ctx := context.TODO()
-
-	var value T
 	if r.cache.Exists(ctx, k) {
 		t := reflect.TypeOf(value)
 		if t.Kind() != reflect.Ptr {
