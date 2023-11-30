@@ -1,6 +1,6 @@
 //go:build locker_db
 
-package locker
+package orm
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/techquest-tech/gin-shared/pkg/core"
-	"github.com/techquest-tech/gin-shared/pkg/orm"
+	"github.com/techquest-tech/gin-shared/pkg/locker"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -20,7 +20,7 @@ type ResourceLocker struct {
 }
 
 func init() {
-	orm.AppendEntity(&ResourceLocker{})
+	AppendEntity(&ResourceLocker{})
 }
 
 type DbLocker struct {
@@ -44,7 +44,7 @@ func (dl *DbLocker) init() error {
 	return nil
 }
 
-func (dl *DbLocker) LockWithtimeout(ctx context.Context, resource string, timeout time.Duration) (Release, error) {
+func (dl *DbLocker) LockWithtimeout(ctx context.Context, resource string, timeout time.Duration) (locker.Release, error) {
 	tx := dl.DB.Begin()
 
 	var cancel context.CancelFunc
@@ -90,11 +90,11 @@ func (dl *DbLocker) LockWithtimeout(ctx context.Context, resource string, timeou
 	}, nil
 }
 
-func (dl *DbLocker) Lock(ctx context.Context, resource string) (Release, error) {
+func (dl *DbLocker) Lock(ctx context.Context, resource string) (locker.Release, error) {
 	return dl.LockWithtimeout(ctx, resource, 0)
 }
 
-func InitDBLocker(db *gorm.DB, logger *zap.Logger) Locker {
+func InitDBLocker(db *gorm.DB, logger *zap.Logger) locker.Locker {
 	result := &DbLocker{
 		DB:     db,
 		Logger: logger,
