@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/asaskevich/EventBus"
+	"go.uber.org/dig"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 var startedEvent = sync.Once{}
@@ -29,4 +31,11 @@ func NotifyStarted() {
 			})
 		}
 	})
+}
+
+type ServiceParam struct {
+	dig.In
+	DB     *gorm.DB
+	Logger *zap.Logger
+	Bus    EventBus.Bus
 }
