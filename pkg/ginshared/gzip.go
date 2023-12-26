@@ -1,4 +1,5 @@
-// go:build gzip || all
+//go:build gzip || all
+
 package ginshared
 
 import (
