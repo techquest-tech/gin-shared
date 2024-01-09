@@ -24,9 +24,11 @@ type EmailTmpl struct {
 	Subject string
 	Body    string
 	// Notfound string
-	Receivers []string
-	tSub      *template.Template
-	tBody     *template.Template
+	Receivers    []string
+	CcReceivers  []string
+	BccReceivers []string
+	tSub         *template.Template
+	tBody        *template.Template
 	// tNotfound *template.Template
 }
 
@@ -73,6 +75,8 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 	en.Logger.Debug("template", zap.String("tmpl", tmpl))
 	en.Logger.Debug("template is ", zap.Any("", tmp))
 	e.To = tmp.Receivers
+	e.Cc = tmp.CcReceivers
+	e.Bcc = tmp.BccReceivers
 
 	err := tmp.tSub.Execute(&out, data)
 	if err != nil {
