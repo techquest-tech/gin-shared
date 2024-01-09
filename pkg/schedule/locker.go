@@ -7,6 +7,8 @@ import (
 
 	"github.com/asaskevich/EventBus"
 	"github.com/robfig/cron/v3"
+	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/locker"
 	"go.uber.org/zap"
 )
@@ -39,4 +41,15 @@ func (sl *ScheduleLoker) Wrapper() cron.JobWrapper {
 			// logger.Info("job done.", zap.Duration("duration", dur))
 		})
 	}
+}
+
+func init() {
+	core.ProvideStartup(func(logger *zap.Logger) core.Startup {
+		dur := viper.GetDuration("locker.timeout")
+		if dur > 0 {
+			LockerTimeout = dur
+			logger.Info("set default cronjob locker timeout", zap.Duration("locker", LockerTimeout))
+		}
+		return nil
+	})
 }
