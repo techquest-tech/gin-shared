@@ -12,6 +12,7 @@ import (
 
 var ScheduleLockerEnabled = true
 var JobHistoryEnabled = true
+var ScheduleDisabled = true
 
 type CronZaplog struct {
 	logger *zap.Logger
@@ -35,12 +36,28 @@ type JobParams struct {
 	Bus    EventBus.Bus `optional:"true"`
 }
 
+func CheckIfEnabled() cron.JobWrapper {
+	return func(j cron.Job) cron.Job {
+		return cron.FuncJob(func() {
+			if ScheduleDisabled {
+				zap.L().Info("cronjob is disabled.")
+				return
+			}
+			j.Run()
+		})
+	}
+}
+
 func CreateSchedule(jobname, schedule string, cmd func()) error {
 	err := core.GetContainer().Invoke(func(p JobParams, pp core.OptionalParam[locker.Locker]) error {
+		if ScheduleDisabled {
+			p.Logger.Info("cronjob is disabled.", zap.String("job", jobname))
+			return nil
+		}
 		l := &CronZaplog{
 			logger: p.Logger,
 		}
-		opts := []cron.JobWrapper{cron.Recover(l), cron.SkipIfStillRunning(l)}
+		opts := []cron.JobWrapper{cron.Recover(l), cron.SkipIfStillRunning(l), CheckIfEnabled()}
 
 		if JobHistoryEnabled && p.Bus != nil {
 			opts = append(opts, Withhistory(p.Bus, jobname))
