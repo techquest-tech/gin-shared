@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/smtp"
+	"sync"
 
 	"github.com/jordan-wright/email"
 	"go.uber.org/zap"
@@ -38,6 +39,7 @@ type EmailNotifer struct {
 	//Receivers []string
 	SMTP     SmtpSettings
 	Template map[string]*EmailTmpl
+	Once     sync.Once
 }
 
 func (en *EmailNotifer) PostInit() error {
@@ -56,11 +58,18 @@ func (en *EmailNotifer) PostInit() error {
 	en.Logger.Debug("template is ready")
 	if en.SMTP.Username != "" {
 		en.SMTP.auth = smtp.PlainAuth("", en.SMTP.Username, en.SMTP.Password, en.SMTP.Host)
+		en.Logger.Info("send email with auth", zap.String("username", en.SMTP.Username))
 	}
 	return nil
 }
 
 func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachments ...string) error {
+	en.Once.Do(func() {
+		err := en.PostInit()
+		if err != nil {
+			panic(err)
+		}
+	})
 	e := email.NewEmail()
 
 	e.From = en.From
@@ -101,7 +110,7 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 	// 		return err
 	// 	}
 	// }
-
+	// e.Text = out.Bytes()
 	e.HTML = out.Bytes()
 
 	for _, file := range attachments {
@@ -119,7 +128,10 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 		zap.Bool("TLS", en.SMTP.Tls),
 	)
 	if en.SMTP.Tls {
-		err = e.SendWithTLS(fullAddress, en.SMTP.auth, &tls.Config{})
+		err = e.SendWithTLS(fullAddress, en.SMTP.auth, &tls.Config{
+			InsecureSkipVerify: true,
+			ServerName:         en.SMTP.Host,
+		})
 		// err = e.SendWithStartTLS(fullAddress, en.SMTP.auth, &tls.Config{})
 	} else {
 		err = e.Send(fullAddress, en.SMTP.auth)

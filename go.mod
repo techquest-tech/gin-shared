@@ -42,6 +42,7 @@ require (
 )
 
 require (
+	github.com/atc0005/go-teams-notify/v2 v2.8.0
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bsm/redislock v0.9.4
 	github.com/bytedance/sonic v1.10.2 // indirect
