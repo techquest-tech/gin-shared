@@ -49,7 +49,7 @@ func initBasedRouterGroup(logger *zap.Logger, router *gin.Engine) *gin.RouterGro
 
 func init() {
 
-	core.Container.Provide(core.InitLogger)
+	// core.Container.Provide(core.InitLogger)
 
 	core.Container.Provide(initEngine)
 

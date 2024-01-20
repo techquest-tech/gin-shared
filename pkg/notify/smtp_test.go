@@ -1,6 +1,7 @@
 package notify_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,14 +21,14 @@ func TestSSEmail(t *testing.T) {
 			Host:     "web1020.dataplugs.com",
 			Port:     465,
 			Username: "tech_support@summation.solutions",
-			Password: "1q@W3e$R",
+			Password: os.Getenv("SMTP_PWD"),
 			Tls:      true,
 		},
 		Template: map[string]*notify.EmailTmpl{
 			"hello": {
-				Subject:   "email test",
+				Subject:   "email test 2",
 				Body:      "it's testing email",
-				Receivers: []string{"armen@summationsolutions.com", "armenpn@gmail.com"},
+				Receivers: []string{"Benedict@summationsolutions.com", "panarm@esquel.com", "armenpn@gmail.com", "107357752@qq.com"},
 			},
 		},
 	}

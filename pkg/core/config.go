@@ -124,3 +124,7 @@ func InitConfig(p Bootup) error {
 	log.Print("load config done.")
 	return nil
 }
+
+func init() {
+	Provide(InitLogger)
+}
