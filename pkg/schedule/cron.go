@@ -12,7 +12,7 @@ import (
 
 var ScheduleLockerEnabled = true
 var JobHistoryEnabled = true
-var ScheduleDisabled = true
+var ScheduleDisabled = false
 
 type CronZaplog struct {
 	logger *zap.Logger
