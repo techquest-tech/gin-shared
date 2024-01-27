@@ -1,7 +1,9 @@
 package orm
 
 import (
+	"bytes"
 	"fmt"
+	"text/template"
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -35,8 +37,19 @@ func InitMysqlViews(tx *gorm.DB, logger *zap.Logger) error {
 	if viewSettings != nil {
 		for _, key := range viewSettings.AllKeys() {
 			query := viewSettings.GetString(key)
-			raw := viewSql(tablePrefix, key, query)
-			err := tx.Exec(raw).Error
+
+			data := make(map[string]interface{}, 0)
+			data["tableprefix"] = tablePrefix
+			viewTpl := template.Must(template.New("tableprefix").Parse(query))
+			out := bytes.Buffer{}
+			err := viewTpl.Execute(&out, data)
+			if err != nil {
+				logger.Error("match view template failed.", zap.Error(err))
+				return err
+			}
+
+			raw := viewSql(tablePrefix, key, out.String())
+			err = tx.Exec(raw).Error
 			if err != nil {
 				logger.Error("update view failed", zap.Error(err), zap.String("view", key))
 				return err
