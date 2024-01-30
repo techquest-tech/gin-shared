@@ -22,6 +22,7 @@ var ScheduleCmd = &cobra.Command{
 		return core.GetContainer().Invoke(func(p Schedule) error {
 			core.NotifyStarted()
 			CloseOnlyNotified()
+			core.NotifyStopping()
 			return nil
 		})
 	},

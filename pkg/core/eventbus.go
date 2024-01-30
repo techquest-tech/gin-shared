@@ -21,5 +21,21 @@ func init() {
 		Bus = EventBus.New()
 		return Bus
 	})
-
 }
+
+// type SystenEvent func()
+
+// func regEvent(e string, fn SystenEvent) {
+// 	ProvideStartup(func(bus EventBus.Bus) Startup {
+// 		bus.SubscribeAsync(e, fn, false)
+// 		return nil
+// 	})
+// }
+
+// func OnServiceStarted(fn SystenEvent) {
+// 	regEvent(EventStarted, fn)
+// }
+
+// func OnServiceStopping(fn SystenEvent) {
+// 	regEvent(EventStopping, fn)
+// }

@@ -100,7 +100,7 @@ func Start() error {
 		}
 
 		p.Logger.Info("app is stopping")
-		p.Bus.Publish(core.EventStopping)
+		core.NotifyStopping()
 		p.Logger.Info("stopped.")
 		return nil
 	})
