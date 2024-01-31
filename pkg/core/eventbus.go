@@ -5,7 +5,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var Bus EventBus.Bus
+var Bus = EventBus.New()
 
 const (
 	EventError    = "event.error"
@@ -18,24 +18,17 @@ const (
 func init() {
 	GetContainer().Provide(func(logger *zap.Logger) EventBus.Bus {
 		logger.Info("event bus inited. use EventBus in memory")
-		Bus = EventBus.New()
 		return Bus
 	})
 }
 
-// type SystenEvent func()
+type SystenEvent func()
 
-// func regEvent(e string, fn SystenEvent) {
-// 	ProvideStartup(func(bus EventBus.Bus) Startup {
-// 		bus.SubscribeAsync(e, fn, false)
-// 		return nil
-// 	})
-// }
+// OnServiceStarted make sure call this func after
+func OnServiceStarted(fn SystenEvent) {
+	Bus.SubscribeAsync(EventStarted, fn, false)
+}
 
-// func OnServiceStarted(fn SystenEvent) {
-// 	regEvent(EventStarted, fn)
-// }
-
-// func OnServiceStopping(fn SystenEvent) {
-// 	regEvent(EventStopping, fn)
-// }
+func OnServiceStopping(fn SystenEvent) {
+	Bus.SubscribeOnce(EventStopping, fn)
+}
