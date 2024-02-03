@@ -31,7 +31,7 @@ func Withhistory(bus EventBus.Bus, jobname string) cron.JobWrapper {
 			func() {
 				logger := zap.L().With(zap.String("jobname", jobname))
 				logger.Debug("mark job started")
-				task := JobHistory{
+				task := &JobHistory{
 					Job:     jobname,
 					Start:   time.Now(),
 					Succeed: true,
