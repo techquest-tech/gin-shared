@@ -77,8 +77,15 @@ func CreateSchedule(jobname, schedule string, cmd func()) error {
 			return err
 		}
 		cr.Start()
-		next := cr.Entry(item).Next
+		entry := cr.Entry(item)
+		next := entry.Next
 		p.Logger.Info("schedule job done", zap.String("job", jobname), zap.Time("next runtime", next))
+
+		core.OnServiceStopping(func() {
+			p.Logger.Info("try to stop scheduled job.", zap.String("job", jobname))
+			cr.Stop()
+			p.Logger.Info("scheduled job stopped.", zap.String("job", jobname))
+		})
 		return nil
 	})
 	if err != nil {
