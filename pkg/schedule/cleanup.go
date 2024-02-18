@@ -61,11 +61,13 @@ func (cs *CleanupService) Cleanup(req *DBCleanupReq) error {
 		return err
 	}
 	cs.logger.Info("duration value ", zap.Duration("duration", duration))
+	tablePrefix := viper.GetString("database.tablePrefix")
 	for _, t := range req.Tables {
 		total := int64(0)
 		sql := fmt.Sprintf("delete from %s where %s <= ? limit ?", t, req.DeletedField)
 		done := false
 		for i := 0; !done; i++ {
+			t = tablePrefix + t
 			cs.logger.Info("delete row", zap.String("table", t), zap.Int("from", i*req.Batch+1), zap.Int("to", (i+1)*req.Batch))
 			result := db.Session(orm.SessionWithConfig(60*time.Second, true)).Exec(sql, starttime, req.Batch)
 			if result.Error != nil {
