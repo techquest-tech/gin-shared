@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -13,14 +14,19 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	EncryptedFile = "config/app.cfg"
+)
+
 var AppName = "RFID App"
 var Version = "latest"
 var ConfigFolder = "config"
 var EmbedConfigFile = "embed" // for init function can't guarantee embed config be load before startup, so write all content to file.
 
+type ConfigSecret []byte
 type Bootup struct {
 	dig.In
-	// EmbedConfig []ConfigYamlContent `group:"config"`
+	Secret ConfigSecret
 }
 
 var embedcache map[string]*viper.Viper = make(map[string]*viper.Viper)
@@ -97,6 +103,14 @@ func loadConfig(configname string) error {
 }
 
 func InitConfig(p Bootup) error {
+	if p.Secret != nil {
+		err := ReadEncryptConfig(p.Secret, EncryptedFile)
+		if err == nil {
+			fmt.Printf("read from %s, load config done.\n", EncryptedFile)
+			return nil
+		}
+	}
+
 	if embedGenerated() {
 		err := loadConfig(EmbedConfigFile)
 		if err != nil {
@@ -122,6 +136,72 @@ func InitConfig(p Bootup) error {
 	}
 
 	log.Print("load config done.")
+	return nil
+}
+
+func EncryptConfig() error {
+	return GetContainer().Invoke(func(logger *zap.Logger, secret ConfigSecret) error {
+		// tmp := "config/tmp.yaml"
+
+		// err := viper.WriteConfigAs(tmp)
+		// if err != nil {
+		// 	logger.Error("read all settings failed.", zap.Error(err))
+		// 	return err
+		// }
+		values := viper.AllSettings()
+		raw, err := json.Marshal(values)
+		if err != nil {
+			return err
+		}
+		//encrypt it with AES
+		out, err := Encrypt(secret, raw)
+		if err != nil {
+			return err
+		}
+
+		err = os.WriteFile(EncryptedFile, out, 0644)
+		if err != nil {
+			logger.Error("write encrypted file failed.", zap.Error(err))
+			return err
+		}
+
+		zap.L().Info("config file encrypt", zap.String("toFile", EncryptedFile), zap.Int("len", len(out)))
+		return nil
+	})
+}
+
+func ReadEncryptConfig(secret []byte, toFile string) error {
+	logger := zap.L()
+	raw, err := os.ReadFile(toFile)
+	if err != nil {
+		fmt.Printf("read encrypt file failed. error %v\n", err.Error())
+		return err
+	}
+
+	out, err := Decrypt(secret, raw)
+	if err != nil {
+		return err
+	}
+
+	values := make(map[string]any)
+	err = json.Unmarshal(out, &values)
+	if err != nil {
+		return err
+	}
+
+	viper.MergeConfigMap(values)
+
+	// reader := bytes.NewReader(out)
+
+	// viper.SetConfigType("yaml")
+
+	// err = viper.ReadConfig(reader)
+	if err != nil {
+		logger.Error("read encrypted config failed.")
+		return err
+	}
+
+	logger.Info("load encrypted config done")
 	return nil
 }
 
