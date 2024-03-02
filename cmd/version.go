@@ -23,7 +23,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/techquest-tech/gin-shared/pkg/ginshared"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 )
 
@@ -33,8 +33,8 @@ var VersionCmd = &cobra.Command{
 	Short: "show app version ",
 	Long:  `check app version`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ginshared.GetContainer().Invoke(func(log *zap.Logger) {
-			ginshared.PrintVersion()
+		return core.GetContainer().Invoke(func(log *zap.Logger) {
+			core.PrintVersion()
 		})
 	},
 }

@@ -1,9 +1,9 @@
 package ginshared
 
 import (
+	"context"
 	"fmt"
-	"log"
-	"runtime"
+	"net/http"
 	"time"
 
 	"github.com/asaskevich/EventBus"
@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	KeyAddress = "address"
-	KeyInitDB  = "database.initDB"
+	KeyAddress  = "address"
+	KeyShutdown = "shutdown"
+	KeyInitDB   = "database.initDB"
 )
 
 func initEngine(logger *zap.Logger, bus EventBus.Bus, p *Components,
@@ -69,43 +70,58 @@ type Params struct {
 	Controllers []DiController `group:"controllers"`
 }
 
-func PrintVersion() {
-	zap.L().Info("Application info:", zap.String("appName", core.AppName),
-		zap.String("verion", core.Version),
-		zap.String("Go version", runtime.Version()),
-	)
-}
 func Start() error {
 	// core.Container.Provide(NewService)
-	err := core.Container.Invoke(func(p Params) (err error) {
-		PrintVersion()
+	return core.Container.Invoke(func(p Params) (err error) {
 		viper.SetDefault(KeyAddress, ":5001")
+		viper.SetDefault(KeyShutdown, 3*time.Second)
 
 		address := viper.GetString(KeyAddress)
+		shutdownDur := viper.GetDuration(KeyShutdown)
+
+		logger := p.Logger.With(zap.String("address", address))
 
 		if len(p.Controllers) == 0 {
+			logger.Error("no controllers defined.")
+
 			return fmt.Errorf("no controller available")
 		}
 
 		core.NotifyStarted()
-		if p.Tls.Enabled {
-			err = p.Router.RunTLS(address, p.Tls.Pem, p.Tls.Key)
-		} else {
-			err = p.Router.Run(address)
+
+		svc := &http.Server{
+			Addr:    address,
+			Handler: p.Router,
 		}
 
-		if err != nil {
-			log.Fatalln("run app failed. ", err)
-			return err
-		}
+		go func() {
+			logger.Info("gin service starting ", zap.String("addr", address))
+			if p.Tls.Enabled {
+				err = svc.ListenAndServeTLS(p.Tls.Pem, p.Tls.Key)
+			} else {
+				err = svc.ListenAndServe()
+			}
+			if err != nil && err != http.ErrServerClosed {
+				logger.Fatal("start gin service failed.", zap.Error(err))
+			}
 
-		p.Logger.Info("app is stopping")
+			logger.Info("app is stopping")
+		}()
+
+		core.CloseOnlyNotified()
 		core.NotifyStopping()
-		p.Logger.Info("stopped.")
+
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownDur)
+		defer cancel()
+		if err := svc.Shutdown(ctx); err != nil {
+			logger.Fatal("Server Shutdown failed", zap.Error(err))
+		}
+		// catching ctx.Done(). timeout of 5 seconds.
+		// select {
+		<-ctx.Done()
+		logger.Info("shutdown timeout", zap.Duration("dur", shutdownDur))
+		// }
+		logger.Info("stopped.")
 		return nil
 	})
-	if err != nil {
-		panic(err)
-	}
-	return err
 }

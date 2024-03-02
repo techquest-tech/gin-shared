@@ -1,8 +1,13 @@
 package core
 
 import (
+	"context"
+	"fmt"
 	"os"
+	"os/signal"
+	"runtime"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/asaskevich/EventBus"
@@ -54,4 +59,26 @@ type ServiceParam struct {
 	DB     *gorm.DB
 	Logger *zap.Logger
 	Bus    EventBus.Bus
+}
+
+var once sync.Once
+
+func CloseOnlyNotified() {
+	once.Do(func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, os.Interrupt)
+		signal.Notify(sigCh, syscall.SIGTERM)
+
+		<-sigCh
+		context.TODO().Done()
+
+		fmt.Printf("app existing...")
+	})
+}
+
+func PrintVersion() {
+	zap.L().Info("Application info:", zap.String("appName", AppName),
+		zap.String("verion", Version),
+		zap.String("Go version", runtime.Version()),
+	)
 }
