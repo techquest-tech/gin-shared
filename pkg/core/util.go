@@ -26,7 +26,7 @@ func NotifyStarted() {
 			startedEvent.Do(func() {
 				dur := os.Getenv("SCM_DUR_STARTED")
 				if dur == "" {
-					dur = "2s"
+					dur = "200ms"
 				}
 				d, err := time.ParseDuration(dur)
 				if err != nil {

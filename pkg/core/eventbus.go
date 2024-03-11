@@ -29,6 +29,17 @@ func OnServiceStarted(fn SystenEvent) {
 	Bus.SubscribeAsync(EventStarted, fn, false)
 }
 
+func InvokeOnServiceStarted(fn any) {
+	Bus.Subscribe(EventStarted, func() {
+		GetContainer().Invoke(fn)
+	})
+}
+func InvokeAsyncOnServiceStarted(fn any) {
+	Bus.SubscribeAsync(EventStarted, func() {
+		GetContainer().Invoke(fn)
+	}, false)
+}
+
 func OnServiceStopping(fn SystenEvent) {
 	Bus.SubscribeOnce(EventStopping, fn)
 }
