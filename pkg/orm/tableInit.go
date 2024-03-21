@@ -2,6 +2,7 @@ package orm
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/asaskevich/EventBus"
 	"github.com/spf13/viper"
@@ -16,12 +17,16 @@ func AppendEntity(entity ...interface{}) {
 	entities = append(entities, entity...)
 }
 
+var ormOnce sync.Once
+
 func ApplyMigrate() error {
 	return core.Container.Invoke(core.Container.Invoke(func(db *gorm.DB, logger *zap.Logger, bus core.OptionalParam[EventBus.Bus]) {
-		if viper.GetBool(KeyInitDB) {
-			MigrateTableAndView(db, logger, bus.P)
-		}
-		viper.Set(KeyInitDB, false) //just make sure the ApplyMigrate run once only
+		ormOnce.Do(func() {
+			if viper.GetBool(KeyInitDB) {
+				MigrateTableAndView(db, logger, bus.P)
+			}
+		})
+
 	}))
 }
 

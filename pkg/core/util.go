@@ -18,7 +18,9 @@ import (
 
 var startedEvent = sync.Once{}
 
-var endEvent = sync.Once{}
+// var endEvent = sync.Once{}
+
+var delay time.Duration
 
 func NotifyStarted() {
 	go GetContainer().Invoke(func(p OptionalParam[EventBus.Bus]) {
@@ -32,6 +34,8 @@ func NotifyStarted() {
 				if err != nil {
 					return
 				}
+
+				delay = d
 				time.Sleep(d)
 				p.P.Publish(EventStarted)
 				zap.L().Info("service started.")
@@ -41,16 +45,16 @@ func NotifyStarted() {
 }
 
 func NotifyStopping() {
-	GetContainer().Invoke(func(p OptionalParam[EventBus.Bus]) {
-		if p.P != nil {
-			endEvent.Do(func() {
-				p.P.Publish(EventStopping)
-				p.P.WaitAsync()
-				// time.Sleep(time.Second)
-				zap.L().Info("service stopped")
-			})
-		}
-	})
+	// GetContainer().Invoke(func(p OptionalParam[EventBus.Bus]) {
+	// 	if p.P != nil {
+	// 		endEvent.Do(func() {
+	// 			p.P.Publish(EventStopping)
+	// 			p.P.WaitAsync()
+	// 			// time.Sleep(time.Second)
+	// 			zap.L().Info("service stopped")
+	// 		})
+	// 	}
+	// })
 
 }
 
@@ -73,6 +77,15 @@ func CloseOnlyNotified() {
 		context.TODO().Done()
 
 		fmt.Printf("app existing...")
+
+		Bus.Publish(EventStopping)
+		Bus.WaitAsync()
+
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+
+		zap.L().Info("service stopped")
 	})
 }
 

@@ -111,7 +111,7 @@ func Start() error {
 		core.CloseOnlyNotified()
 		core.NotifyStopping()
 
-		ctx, cancel := context.WithTimeout(context.Background(), shutdownDur)
+		ctx, cancel := context.WithTimeout(context.TODO(), shutdownDur)
 		defer cancel()
 		if err := svc.Shutdown(ctx); err != nil {
 			logger.Fatal("Server Shutdown failed", zap.Error(err))
