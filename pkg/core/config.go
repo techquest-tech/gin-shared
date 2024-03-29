@@ -197,13 +197,15 @@ func ReadEncryptConfig(secret []byte, toFile string) error {
 	logger := zap.L()
 	raw, err := os.ReadFile(toFile)
 	if err != nil {
-
-		log.Printf("read encrypt file failed. error %v\n", err.Error())
+		if !errors.Is(err, os.ErrNotExist) {
+			log.Printf("read encrypt file failed. error %v\n", err.Error())
+		}
 		return err
 	}
 
 	out, err := Decrypt(secret, raw)
 	if err != nil {
+		log.Printf("decrypt file failed. %v", err)
 		return err
 	}
 
