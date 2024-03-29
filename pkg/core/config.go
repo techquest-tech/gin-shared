@@ -67,6 +67,16 @@ func ToEmbedConfig(content []byte, keys ...string) {
 	}
 }
 
+// make sure run it in main before init anything, just make sure, all embed config inited.
+func InitEmbedConfig() {
+	config := embedcache[""]
+	if config != nil {
+		viper.MergeConfigMap(config.AllSettings())
+	} else {
+		fmt.Println("no embed config files at all.")
+	}
+}
+
 func GenerateEmbedConfigfile() error {
 	for k, v := range embedcache {
 		filename := EmbedConfigFile + ".yaml"
@@ -111,12 +121,12 @@ func InitConfig(p Bootup) error {
 		}
 	}
 
-	if embedGenerated() {
-		err := loadConfig(EmbedConfigFile)
-		if err != nil {
-			return err
-		}
-	}
+	// if embedGenerated() {
+	// 	err := loadConfig(EmbedConfigFile)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	configName := os.Getenv("APP_CONFIG")
 	if configName == "" {
@@ -131,7 +141,11 @@ func InitConfig(p Bootup) error {
 	envfile := os.Getenv("ENV")
 	if envfile != "" {
 		//load embed_envfile first
-		loadConfig(EmbedConfigFile + "-" + envfile) //allow config file missing
+		// loadConfig(EmbedConfigFile + "-" + envfile) //allow config file missing
+		envConfig := embedcache[envfile]
+		if envConfig != nil {
+			viper.MergeConfigMap(envConfig.AllSettings())
+		}
 		loadConfig(envfile)
 	}
 
