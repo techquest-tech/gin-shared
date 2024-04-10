@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/techquest-tech/gin-shared/pkg/core"
+	"go.uber.org/zap"
 )
 
 // var glocker sync.Mutex
@@ -38,6 +39,7 @@ func (ml *LocalLocker) Lock(ctx context.Context, resource string) (Release, erro
 }
 
 func (ml *LocalLocker) LockWithtimeout(ctx context.Context, resource string, timeout time.Duration) (Release, error) {
+	logger := zap.L().With(zap.String("resources", resource))
 	var locker *sync.Mutex
 	raw, ok := ml.locker.Load(resource)
 	if !ok {
@@ -49,8 +51,10 @@ func (ml *LocalLocker) LockWithtimeout(ctx context.Context, resource string, tim
 
 	start := time.Now()
 	for {
+		logger.Debug("waiting for locker")
 		ok := locker.TryLock()
 		if ok {
+			logger.Debug("done")
 			return func(ctx context.Context) error {
 				locker.Unlock()
 				return nil
@@ -59,6 +63,7 @@ func (ml *LocalLocker) LockWithtimeout(ctx context.Context, resource string, tim
 		time.Sleep(ml.ticker)
 		dur := time.Since(start)
 		if dur > timeout {
+			logger.Warn("get locker failed.")
 			return nil, errors.New("timeout")
 		}
 	}
@@ -67,7 +72,7 @@ func (ml *LocalLocker) LockWithtimeout(ctx context.Context, resource string, tim
 func InitLocalLocker() Locker {
 	return &LocalLocker{
 		locker: sync.Map{},
-		ticker: 10 * time.Millisecond,
+		ticker: time.Second,
 	}
 }
 
