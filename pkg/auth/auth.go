@@ -144,13 +144,17 @@ func (a *AuthService) Validate(key string) (*AuthKey, bool) {
 }
 
 func (a *AuthService) Auth(c *gin.Context) {
-	key := ""
-	switch c.Request.Method {
-	case "GET":
-		key = c.Query(a.HeaderKey)
-	default:
+	key := c.Query(a.HeaderKey)
+
+	if key == "" && c.Request.Method != "GET" {
 		key = c.PostForm(a.HeaderKey)
 	}
+	// switch c.Request.Method {
+	// case "GET":
+	// 	key = c.Query(a.HeaderKey)
+	// default:
+	// 	key = c.PostForm(a.HeaderKey)
+	// }
 	if key == "" {
 		key = c.GetHeader(a.HeaderKey)
 	}
