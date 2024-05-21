@@ -44,6 +44,6 @@ func OnServiceStopping(fn SystenEvent) {
 	Bus.SubscribeOnce(EventStopping, fn)
 }
 
-func OnEvent(topic string, fn SystenEvent) {
+func OnEvent(topic string, fn any) {
 	Bus.Subscribe(topic, fn)
 }
