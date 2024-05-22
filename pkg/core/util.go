@@ -58,6 +58,13 @@ func NotifyStopping() {
 
 }
 
+func BeforeBootup(key string) {
+	Provide(func() ConfigSecret {
+		return ConfigSecret(key)
+	})
+	InitEmbedConfig()
+}
+
 type ServiceParam struct {
 	dig.In
 	DB     *gorm.DB

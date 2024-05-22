@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -22,7 +20,8 @@ const (
 var AppName = "RFID App"
 var Version = "latest"
 var ConfigFolder = "config"
-var EmbedConfigFile = "embed" // for init function can't guarantee embed config be load before startup, so write all content to file.
+
+// var EmbedConfigFile = "embed" // for init function can't guarantee embed config be load before startup, so write all content to file.
 
 type ConfigSecret []byte
 
@@ -86,23 +85,23 @@ func InitEmbedConfig() {
 	Provide(func() EmbedConfigReady { return nil })
 }
 
-func GenerateEmbedConfigfile() error {
-	for k, v := range embedcache {
-		filename := EmbedConfigFile + ".yaml"
-		if k != "" {
-			filename = fmt.Sprintf("%s-%s.yaml", EmbedConfigFile, k)
-		}
-		err := v.WriteConfigAs(filepath.Join(ConfigFolder, filename))
-		if err != nil {
-			return err
-		}
-		zap.L().Info("write config file done", zap.String("configFile", filename))
-	}
-	if len(embedcache) == 0 {
-		zap.L().Info("no config file generated.")
-	}
-	return nil
-}
+// func GenerateEmbedConfigfile() error {
+// 	for k, v := range embedcache {
+// 		filename := EmbedConfigFile + ".yaml"
+// 		if k != "" {
+// 			filename = fmt.Sprintf("%s-%s.yaml", EmbedConfigFile, k)
+// 		}
+// 		err := v.WriteConfigAs(filepath.Join(ConfigFolder, filename))
+// 		if err != nil {
+// 			return err
+// 		}
+// 		zap.L().Info("write config file done", zap.String("configFile", filename))
+// 	}
+// 	if len(embedcache) == 0 {
+// 		zap.L().Info("no config file generated.")
+// 	}
+// 	return nil
+// }
 
 func loadConfig(configname string) error {
 	profileConfig := viper.New()
