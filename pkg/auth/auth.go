@@ -3,6 +3,8 @@ package auth
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -70,6 +72,20 @@ type AuthService struct {
 	Keys      []string
 	userCache *cache.Cache[*AuthKey]
 	HeaderKey string
+}
+
+type Owner struct {
+	gorm.Model
+	Ownername      string `gorm:"size:16;"`
+	Suspended      bool
+	DecoderVersion string `gorm:"size:16;"`
+}
+
+type StoreUser struct {
+	UpdatedAt time.Time
+	OwnerID   *uint  `gorm:"primaryKey"`
+	StoreCode string `gorm:"size:64;primaryKey"`
+	UserCode  string `gorm:"size:64;primaryKey"`
 }
 
 func Hash(rawKey string) string {
@@ -185,7 +201,7 @@ func (a *AuthService) Auth(c *gin.Context) {
 	}
 }
 
-func (a *AuthService) CreateUser(owner, username, remark, rawKey string) (string, error) {
+func (a *AuthService) CreateUser(owner, username, remark, rawKey, storeCode string) (string, error) {
 	u4 := rawKey
 	if u4 == "" {
 		u4 = randstr.String(32)
@@ -200,6 +216,25 @@ func (a *AuthService) CreateUser(owner, username, remark, rawKey string) (string
 	err := a.Db.Save(key).Error
 	if err != nil {
 		return "", err
+	}
+	if storeCode != "" {
+		ownerObj := &Owner{}
+		err = a.Db.First(ownerObj, "ownername= ?", owner).Error
+		if err != nil {
+			return "", fmt.Errorf("%s is not found,pls add this owner first.error: %s", owner, err.Error())
+		}
+		storeUser := &StoreUser{}
+		err = a.Db.First(storeUser, "owner_id =?  and user_code = ? and store_code = ?", ownerObj.ID, username, storeCode).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", err
+		}
+		storeUser.OwnerID = &ownerObj.ID
+		storeUser.StoreCode = storeCode
+		storeUser.UserCode = username
+		err = a.Db.Save(storeUser).Error
+		if err != nil {
+			return "", err
+		}
 	}
 	return u4, nil
 }

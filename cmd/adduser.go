@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	username string
-	owner    string
-	remark   string
-	apikey   string
+	username  string
+	owner     string
+	remark    string
+	apikey    string
+	storecode string
 )
 
 // adduserCmd represents the adduser command
@@ -28,7 +29,7 @@ var AdduserCmd = &cobra.Command{
 			if username == "" {
 				username = owner + "-user" + randstr.Dec(3)
 			}
-			key, err := auth.CreateUser(owner, username, remark, apikey)
+			key, err := auth.CreateUser(owner, username, remark, apikey, storecode)
 			if err != nil {
 				return err
 			}
@@ -54,4 +55,5 @@ func init() {
 	AdduserCmd.Flags().StringVarP(&owner, "owner", "o", "", "Ownername")
 	AdduserCmd.Flags().StringVarP(&remark, "remark", "", "", "remark only")
 	AdduserCmd.Flags().StringVarP(&apikey, "raw", "k", "", "leave it empty will random one.")
+	AdduserCmd.Flags().StringVarP(&storecode, "storecode", "s", "", "set defualt storecode for username")
 }
