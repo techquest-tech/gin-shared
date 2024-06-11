@@ -24,7 +24,6 @@ type Cache[T any] struct {
 
 func NewWithTimeout[T any](dur time.Duration) *Cache[T] {
 	r := &Cache[T]{
-		// cc: NewRedisCacheProvider[T](dur),
 		cc: NewCacheProvider[T](dur),
 	}
 	zap.L().Info("cache provider ready.", zap.String("provider", fmt.Sprintf("%T", r.cc)))

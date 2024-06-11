@@ -1,10 +1,13 @@
-//go:build redis
+//go:build !cache_ram
 
 package cache
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -16,12 +19,57 @@ import (
 	"go.uber.org/zap"
 )
 
+type RedisConfig struct {
+	Host    string
+	Port    uint
+	Account string
+	Passwd  string
+	Caroot  string // where is the ca pem file.
+	Tls     bool   //TLS enabled ?
+	DB      int    // 0: dev, 1: uat, 3: prd
+}
+
 func NewRedisClient(logger *zap.Logger) *redis.Client {
 	opts := &redis.Options{}
 	subRedis := viper.Sub("redis")
-	if subRedis != nil {
-		subRedis.Unmarshal(opts)
+	cfg := &RedisConfig{
+		Port: 6379,
 	}
+	if subRedis != nil {
+		subRedis.Unmarshal(cfg)
+	}
+	if cfg.Host != "" {
+		opts.Addr = fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	}
+	if cfg.Account != "" {
+		opts.Username = cfg.Account
+		opts.Password = cfg.Passwd
+	}
+	if cfg.DB > 0 {
+		opts.DB = cfg.DB
+	}
+
+	if cfg.Tls {
+		tconfig := &tls.Config{
+			MinVersion: tls.VersionTLS13,
+			ServerName: cfg.Host,
+		}
+		logger.Info("TLS is enabled.")
+		if cfg.Caroot != "" {
+			caCert, err := os.ReadFile(cfg.Caroot)
+			if err != nil {
+				panic("read redis ca pem failed. " + err.Error())
+			}
+			caCertPool := x509.NewCertPool()
+			if ok := caCertPool.AppendCertsFromPEM(caCert); !ok {
+				panic("parse ca certs failed.")
+			}
+			tconfig.RootCAs = caCertPool
+			logger.Info("redis RootCAs loaded done")
+		}
+		opts.TLSConfig = tconfig
+	}
+
 	client := redis.NewClient(opts)
 	logger.Info("connected to redis", zap.String("redis", opts.Addr))
 	return client

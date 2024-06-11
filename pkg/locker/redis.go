@@ -1,4 +1,4 @@
-//go:build locker_redis || redis
+//go:build !locker_ram || !locker_db
 
 package locker
 

@@ -1,4 +1,4 @@
-//go:build !redis
+//go:build cache_ram
 
 package cache
 

@@ -1,4 +1,4 @@
-//go:build redis
+//go:build !cache_ram
 
 package cache_test
 
@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/techquest-tech/gin-shared/pkg/cache"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 )
 
 type CDemo struct {
@@ -15,6 +16,8 @@ type CDemo struct {
 }
 
 func TestRedisCache(t *testing.T) {
+	core.BeforeBootup("")
+
 	rr := cache.NewCacheProvider[string](10 * time.Minute)
 
 	value := "Hello Redis"
@@ -26,7 +29,7 @@ func TestRedisCache(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, value, cachedValue)
 
-	r2 := cache.NewRCacheProvider[*CDemo](10 * time.Minute)
+	r2 := cache.NewCacheProvider[*CDemo](10 * time.Minute)
 
 	r2.Set(k, &CDemo{Value: value})
 
