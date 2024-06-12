@@ -1,11 +1,22 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"go.uber.org/zap"
 )
+
+type WithKey interface {
+	Key() string
+}
+
+type CachedList[T any] interface {
+	Append(ctx context.Context, key string, raw ...T) error
+	GetAll(ctx context.Context, key string) ([]T, error)
+	Del(ctx context.Context, key string) error
+}
 
 type CacheProvider[T any] interface {
 	Set(key string, value T)

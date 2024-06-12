@@ -1,4 +1,4 @@
-//go:build !locker_ram || !locker_db
+//go:build !ram || !locker_db
 
 package locker
 

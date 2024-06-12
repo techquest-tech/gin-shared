@@ -1,4 +1,4 @@
-//go:build cache_ram
+//go:build ram
 
 package cache
 

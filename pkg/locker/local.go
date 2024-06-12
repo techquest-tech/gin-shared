@@ -1,4 +1,4 @@
-//go:build locker_ram
+//go:build ram
 
 package locker
 
