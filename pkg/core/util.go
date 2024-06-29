@@ -18,6 +18,8 @@ import (
 
 var startedEvent = sync.Once{}
 
+var beforebootup = sync.Once{}
+
 // var endEvent = sync.Once{}
 
 var delay time.Duration
@@ -59,10 +61,13 @@ func NotifyStopping() {
 }
 
 func BeforeBootup(key string) {
-	Provide(func() ConfigSecret {
-		return ConfigSecret(key)
+	beforebootup.Do(func() {
+		Provide(func() ConfigSecret {
+			return ConfigSecret(key)
+		})
+		InitEmbedConfig()
 	})
-	InitEmbedConfig()
+
 }
 
 type ServiceParam struct {
