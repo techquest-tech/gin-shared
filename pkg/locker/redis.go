@@ -47,7 +47,7 @@ func (r *RedisLocker) LockWithtimeout(ctx context.Context, resource string, time
 				time.Sleep(r.Timeout)
 				continue
 			}
-			r.Logger.Error("get locker failed.", zap.Error(err))
+			r.Logger.Error("get locker failed.", zap.Error(err), zap.String("resource", resource))
 			return nil, err
 		}
 		return lock.Release, nil
