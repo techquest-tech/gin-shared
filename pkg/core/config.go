@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/spf13/viper"
 	"go.uber.org/dig"
@@ -46,7 +47,12 @@ var embedcache map[string]*viper.Viper = make(map[string]*viper.Viper)
 // 	return true
 // }
 
+var embedConfigLocker = sync.Mutex{}
+
 func ToEmbedConfig(content []byte, keys ...string) {
+	embedConfigLocker.Lock()
+	defer embedConfigLocker.Unlock()
+
 	configItem := viper.New()
 	configItem.SetConfigType("yaml")
 	err := configItem.ReadConfig(bytes.NewReader(content))
@@ -222,10 +228,10 @@ func ReadEncryptConfig(secret []byte, toFile string) error {
 	// viper.SetConfigType("yaml")
 
 	// err = viper.ReadConfig(reader)
-	if err != nil {
-		logger.Error("read encrypted config failed.")
-		return err
-	}
+	// if err != nil {
+	// 	logger.Error("read encrypted config failed.")
+	// 	return err
+	// }
 
 	logger.Info("load encrypted config done")
 	return nil
