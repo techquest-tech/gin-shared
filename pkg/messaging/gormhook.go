@@ -41,42 +41,65 @@ var cfg = &gorm.Session{
 }
 
 func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic, consumer string, raw []byte) error {
-	key, payloadRaw, err := ToKeyAndPayload(raw)
+	kp, err := toKeyAndPayload(raw)
 	if err != nil {
 		ss.Logger.Error("unexpected payload", zap.Error(err))
 		return err
 	}
-	tt, ok := m[key]
+	tt, ok := m[kp.Key]
 	if !ok {
-		return errors.New("received object failed. unknown key " + key)
+		return errors.New("received object failed. unknown key " + kp.Key)
 	}
 	payload := reflect.New(tt).Interface()
-	err = json.Unmarshal(payloadRaw, payload)
+	err = json.Unmarshal(kp.Payload, payload)
 	if err != nil {
 		ss.Logger.Info("unexpected payload,", zap.Error(err))
 		return err
 	}
-	err = ss.DB.Session(cfg).Save(payload).Error
-	if err != nil {
-		ss.Logger.Info("save object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
-		return err
+	tx := ss.DB.Session(cfg)
+	switch kp.Action {
+	case GormActionSave:
+		err = tx.Save(payload).Error
+		if err != nil {
+			ss.Logger.Info("save object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
+			return err
+		}
+		ss.Logger.Info("save object done.", zap.String("data", tt.Name()))
+	case GormActionDelete:
+		err = tx.Delete(payload).Error
+		if err != nil {
+			ss.Logger.Info("delete object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
+			return err
+		}
+		ss.Logger.Info("delete object done.", zap.String("data", tt.Name()))
+	default:
+		ss.Logger.Info("unknown action.", zap.String("action", string(kp.Action)))
+		return errors.ErrUnsupported
 	}
-	ss.Logger.Info("save object done.", zap.String("data", tt.Name()))
+
 	return nil
 }
 
-type PayloadForGormSaved struct {
+type GormAction string
+
+const (
+	GormActionSave   = "save"
+	GormActionDelete = "delete"
+)
+
+type GormPayload struct {
 	Key     string
+	Action  GormAction
 	Payload []byte
 }
 
-func ToKeyAndPayload(raw []byte) (string, []byte, error) {
-	var payload PayloadForGormSaved
+func toKeyAndPayload(raw []byte) (*GormPayload, error) {
+	var payload GormPayload
 	err := json.Unmarshal(raw, &payload)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
-	return payload.Key, payload.Payload, nil
+	return &payload, nil
 }
 
 var m = map[string]reflect.Type{}
@@ -95,15 +118,22 @@ func Reg(payload any) {
 }
 
 func PubGormSaved(ctx context.Context, payload any) error {
+	return pubGormAction(ctx, payload, GormActionSave)
+}
+
+func PubGormDeleted(ctx context.Context, payload any) error {
+	return pubGormAction(ctx, payload, GormActionDelete)
+}
+
+func pubGormAction(ctx context.Context, payload any, action GormAction) error {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	// if key == "" {
+
 	tt := reflect.TypeOf(payload)
 	key := tt.String()
 	key = strings.TrimLeft(key, "*")
-	// }
 
-	return ms.Pub(ctx, DefaultGormToipc, PayloadForGormSaved{Key: key, Payload: raw})
+	return ms.Pub(ctx, DefaultGormToipc, GormPayload{Key: key, Payload: raw, Action: action})
 }
