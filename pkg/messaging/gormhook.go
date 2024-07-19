@@ -75,12 +75,6 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 	}
 	tx := ss.DB.Session(cfg)
 
-	// if b, ok := payload.(common.OwnerBase); ok {
-	// 	tx.Statement.Parse(payload)
-
-	// 	ownerID := b.GetOwnerID()
-	// 	ss.Logger.Info("read owner & table name", zap.Uint("ownerID", ownerID), zap.String("tablename", tx.Statement.Table))
-	// }
 	if ss.Sharding != nil {
 		tablename, err := ss.Sharding(tx, payload)
 		if err != nil {
@@ -101,7 +95,16 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 	case GormActionDelete:
 		err = tx.Delete(payload).Error
 		if err != nil {
-			ss.Logger.Info("delete object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
+			ss.Logger.Error("delete object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
+
+			if tt, ok := payload.(IDbase); ok {
+				id := tt.GetID()
+				if id == 0 {
+					ss.Logger.Warn("empty entity, just skip")
+					return nil
+				}
+			}
+
 			return err
 		}
 		ss.Logger.Info("delete object done.", zap.String("data", tt.Name()))
@@ -140,7 +143,17 @@ func PubGormSaved(ctx context.Context, payload any) error {
 }
 
 func PubGormDeleted(ctx context.Context, payload any) error {
+	if tt, ok := payload.(IDbase); ok {
+		if tt.GetID() == 0 {
+			zap.L().Warn("empty entity, just skip")
+			return nil
+		}
+	}
 	return pubGormAction(ctx, payload, GormActionDelete)
+}
+
+type IDbase interface {
+	GetID() uint
 }
 
 func pubGormAction(ctx context.Context, payload any, action GormAction) error {
