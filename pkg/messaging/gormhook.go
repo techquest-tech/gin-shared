@@ -22,7 +22,19 @@ func init() {
 		return nil
 	})
 }
+
 func NewGormObjSyncService(ms MessagingService, logger *zap.Logger, db *gorm.DB) *GormObjSyncService {
+	// err := db.Use(sharding.Register(sharding.Config{
+	// 	ShardingKey:         "owner_id",
+	// 	NumberOfShards:      64,
+	// 	PrimaryKeyGenerator: sharding.PKSnowflake,
+	// }, "scm_cartons"))
+
+	// if err != nil {
+	// 	logger.Fatal("register sharding failed.")
+	// }
+	// logger.Info("gorm sharding enabled.")
+
 	return &GormObjSyncService{
 		MessageService: ms,
 		DB:             db,
@@ -30,14 +42,18 @@ func NewGormObjSyncService(ms MessagingService, logger *zap.Logger, db *gorm.DB)
 	}
 }
 
+type Sharding func(tx *gorm.DB, payload any) (tablename string, err error)
+
 type GormObjSyncService struct {
 	MessageService MessagingService
 	DB             *gorm.DB
 	Logger         *zap.Logger
+	Sharding       Sharding
 }
 
 var cfg = &gorm.Session{
 	SkipHooks: true,
+	NewDB:     true,
 }
 
 func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic, consumer string, raw []byte) error {
@@ -48,6 +64,7 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 	}
 	tt, ok := m[kp.Key]
 	if !ok {
+		ss.Logger.Error("received object failed. unknown key, just drop it.", zap.String("key", kp.Key))
 		return errors.New("received object failed. unknown key " + kp.Key)
 	}
 	payload := reflect.New(tt).Interface()
@@ -57,8 +74,24 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 		return err
 	}
 	tx := ss.DB.Session(cfg)
+
+	// if b, ok := payload.(common.OwnerBase); ok {
+	// 	tx.Statement.Parse(payload)
+
+	// 	ownerID := b.GetOwnerID()
+	// 	ss.Logger.Info("read owner & table name", zap.Uint("ownerID", ownerID), zap.String("tablename", tx.Statement.Table))
+	// }
+	if ss.Sharding != nil {
+		tablename, err := ss.Sharding(tx, payload)
+		if err != nil {
+			return err
+		}
+		tx = tx.Table(tablename)
+		ss.Logger.Info("sharding table for payload", zap.String("table", tablename))
+	}
+
 	switch kp.Action {
-	case GormActionSave:
+	case GormActionSave, "":
 		err = tx.Save(payload).Error
 		if err != nil {
 			ss.Logger.Info("save object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
@@ -100,21 +133,6 @@ func toKeyAndPayload(raw []byte) (*GormPayload, error) {
 		return nil, err
 	}
 	return &payload, nil
-}
-
-var m = map[string]reflect.Type{}
-var revert = map[reflect.Type]string{}
-
-func Reg(payload any) {
-	tt := reflect.TypeOf(payload)
-	// if key == "" {
-	key := tt.String()
-	key = strings.TrimLeft(key, "*")
-	// }
-	m[key] = tt
-	revert[tt] = key
-
-	zap.L().Info("gorm object registered.", zap.String("key", key), zap.String("type", tt.String()))
 }
 
 func PubGormSaved(ctx context.Context, payload any) error {

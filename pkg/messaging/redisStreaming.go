@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/techquest-tech/gin-shared/pkg/core"
@@ -13,9 +17,10 @@ import (
 )
 
 const (
-	DefaultMsgLimit = 10000
-	DefaultAttKey   = "payload"
-	DefaultSchedule = "@every 30m"
+	DefaultMsgLimit          = 10000
+	DefaultAttKey            = "payload"
+	DefaultSchedule          = "@every 10s"
+	DefaultDeadLetterDurtion = 8 * time.Hour //if messaging pending for more than this duration, will be put to dead letter
 )
 
 type DefaultMessgingService struct {
@@ -54,7 +59,7 @@ func (msg *DefaultMessgingService) Pub(ctx context.Context, topic string, payloa
 }
 
 func (msg *DefaultMessgingService) handleMessage(ctx context.Context, topic, group string, logger *zap.Logger,
-	processor Processor, v redis.XMessage) {
+	processor Processor, v redis.XMessage) error {
 	id := v.ID
 	value := v.Values
 	logger.Debug("recieved message", zap.String("ID", id), zap.Any("value", value))
@@ -63,16 +68,17 @@ func (msg *DefaultMessgingService) handleMessage(ctx context.Context, topic, gro
 	err := processor(ctx, topic, group, []byte(vv))
 	if err != nil {
 		logger.Error("processor return error", zap.Error(err))
-		return
+		return err
 	}
 	resp := msg.Client.XAck(ctx, topic, group, id)
 	if resp.Err() != nil {
 		logger.Error("ack message failed.", zap.Error(resp.Err()))
 	}
 	logger.Info("process done")
+	return nil
 }
 
-func (msg *DefaultMessgingService) processPendings(ctx context.Context, topic, group string, processor Processor) {
+func (msg *DefaultMessgingService) ProcessPendings(ctx context.Context, topic, group string, processor Processor) {
 	logger := msg.Logger.With(zap.String("topic", topic))
 	// read pendings
 	cmdPending, err := msg.Client.XPending(ctx, topic, group).Result()
@@ -87,9 +93,41 @@ func (msg *DefaultMessgingService) processPendings(ctx context.Context, topic, g
 				zap.String("start", cmdPending.Lower), zap.String("end", cmdPending.Higher))
 			return
 		}
+		logger.Info("read pending message by xrange done.", zap.Int("count", len(xrangeResult)))
 		for _, item := range xrangeResult {
-			msg.handleMessage(ctx, topic, group, logger, processor, item)
+			err = msg.handleMessage(ctx, topic, group, logger, processor, item)
+			if err != nil {
+				logger.Error("process pending message failed. ", zap.Error(err))
+				strT := item.ID
+				index := strings.IndexRune(item.ID, '-')
+				if index > 0 {
+					strT = item.ID[:index]
+				}
+
+				unixTimeint, err := strconv.ParseInt(strT, 10, 64)
+				if err != nil {
+					logger.Warn("convert pending message id failed.", zap.Error(err))
+				}
+				pendinged := time.Since(time.Unix(unixTimeint/1000, 0))
+				logger.Info("checking pending duration", zap.Duration("pendinged", pendinged))
+				if pendinged >= DefaultDeadLetterDurtion || err != nil {
+					logger.Warn("pending message expired, put it to dead letter", zap.String("duration", pendinged.String()))
+					resp := msg.Client.XAdd(ctx, &redis.XAddArgs{
+						Stream: fmt.Sprintf("%s.%s.deadletter", topic, group),
+						Values: item.Values,
+					})
+					if resp.Err() != nil {
+						logger.Error("send to dead letter failed.", zap.Error(resp.Err()))
+					}
+
+					ackResp := msg.Client.XAck(ctx, topic, group, item.ID)
+					if ackResp.Err() != nil {
+						logger.Error("ack pending message failed.", zap.Error(ackResp.Err()))
+					}
+				}
+			}
 		}
+		logger.Info("process pending message done")
 	} else {
 		logger.Info("no pending messages")
 	}
@@ -139,19 +177,19 @@ func (msg *DefaultMessgingService) Sub(ctx context.Context, topic, group string,
 		pschedule = DefaultSchedule
 	}
 
-	schedule.CreateSchedule("check_pending_message", pschedule, func() {
-		msg.processPendings(ctx, topic, group, processor)
+	schedule.CreateSchedule(fmt.Sprintf("check_pending_message/%s/%s", topic, group), pschedule, func() {
+		msg.ProcessPendings(context.TODO(), topic, group, processor)
 	})
 
 	return nil
 }
 
 func init() {
-	core.Provide(func(client *redis.Client, logger *zap.Logger) MessagingService {
+	core.Provide(func(client *redis.Client, logger *zap.Logger) (MessagingService, *DefaultMessgingService) {
 		d := &DefaultMessgingService{
 			Client: client,
 			Logger: logger,
 		}
-		return d
+		return d, d
 	})
 }

@@ -1,6 +1,8 @@
 package schedule
 
 import (
+	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/asaskevich/EventBus"
@@ -46,6 +48,17 @@ func Withhistory(bus EventBus.Bus, jobname string) cron.JobWrapper {
 							logger.Info(msg)
 						}
 						task.Succeed = false
+
+						buf := make([]byte, 1024)
+						for {
+							n := runtime.Stack(buf, true)
+							if n < len(buf) {
+								buf = buf[:n]
+								break
+							}
+							buf = make([]byte, 2*len(buf))
+						}
+						fmt.Printf("Full stack trace:\n%s", buf)
 					}
 					logger.Info("job done")
 
