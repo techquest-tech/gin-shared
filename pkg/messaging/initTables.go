@@ -18,6 +18,10 @@ func Reg(payload any) {
 	key := tt.String()
 	key = strings.TrimLeft(key, "*")
 	// }
+	if _, ok := m[key]; ok {
+		zap.L().Warn("registered duplicated, ignored.")
+		return
+	}
 	m[key] = tt
 	revert[tt] = key
 

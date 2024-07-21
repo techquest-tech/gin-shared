@@ -43,7 +43,8 @@ func SessionWithConfig(slowThreshold time.Duration, ignoredNotFound bool) *gorm.
 	}
 }
 
-func InitDB(sub string, logger *zap.Logger) *gorm.DB {
+func InitDBWithPrefix(sub string, prefix string) *gorm.DB {
+	logger := zap.L()
 	dbSettings := viper.Sub(sub)
 	if dbSettings == nil {
 		return nil
@@ -74,6 +75,10 @@ func InitDB(sub string, logger *zap.Logger) *gorm.DB {
 	}
 
 	tablePrefix := dbSettings.GetString("tablePrefix")
+	if prefix != "" {
+		tablePrefix = prefix + "_" + tablePrefix
+	}
+
 	if tablePrefix != "" {
 		cfg.NamingStrategy = schema.NamingStrategy{
 			TablePrefix: tablePrefix,
@@ -102,6 +107,8 @@ func InitDB(sub string, logger *zap.Logger) *gorm.DB {
 	logger.Info("connected to " + dbType)
 
 	return db
+}
 
-	// go bus.Publish(EventDBReady)
+func InitDB(sub string, logger *zap.Logger) *gorm.DB {
+	return InitDBWithPrefix(sub, "")
 }

@@ -24,17 +24,6 @@ func init() {
 }
 
 func NewGormObjSyncService(ms MessagingService, logger *zap.Logger, db *gorm.DB) *GormObjSyncService {
-	// err := db.Use(sharding.Register(sharding.Config{
-	// 	ShardingKey:         "owner_id",
-	// 	NumberOfShards:      64,
-	// 	PrimaryKeyGenerator: sharding.PKSnowflake,
-	// }, "scm_cartons"))
-
-	// if err != nil {
-	// 	logger.Fatal("register sharding failed.")
-	// }
-	// logger.Info("gorm sharding enabled.")
-
 	return &GormObjSyncService{
 		MessageService: ms,
 		DB:             db,
