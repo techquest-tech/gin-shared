@@ -14,6 +14,8 @@ import (
 
 var DefaultGormToipc = "scm.gorm.saved"
 
+var GormMessagingEnabled = true
+
 var ms MessagingService
 
 func init() {
@@ -146,6 +148,9 @@ type IDbase interface {
 }
 
 func pubGormAction(ctx context.Context, payload any, action GormAction) error {
+	if !GormMessagingEnabled {
+		return nil
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return err
