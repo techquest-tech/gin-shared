@@ -28,7 +28,7 @@ type OrmDialector func(dsn string) gorm.Dialector
 var DialectorMap = make(map[string]OrmDialector)
 
 func InitDefaultDB(logger *zap.Logger) *gorm.DB {
-	return InitDB("database", logger)
+	return InitDBWithPrefix("database", "")
 }
 
 func SessionWithConfig(slowThreshold time.Duration, ignoredNotFound bool) *gorm.Session {
