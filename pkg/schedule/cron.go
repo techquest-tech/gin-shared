@@ -1,6 +1,8 @@
 package schedule
 
 import (
+	"fmt"
+
 	"github.com/asaskevich/EventBus"
 	"github.com/robfig/cron/v3"
 	"github.com/techquest-tech/gin-shared/pkg/core"
@@ -48,7 +50,26 @@ func CheckIfEnabled() cron.JobWrapper {
 	}
 }
 
+var jobs = make(map[string]func())
+
+func Run(jobname string) (err error) {
+	fn, ok := jobs[jobname]
+	defer func() {
+		if err := recover(); err != nil {
+			zap.L().Error("run job failed", zap.String("job", jobname), zap.Any("err", err))
+		}
+	}()
+	if ok {
+		zap.L().Info("run job", zap.String("job", jobname))
+		fn()
+		return nil
+	}
+	return fmt.Errorf("job %s not found", jobname)
+}
+
 func CreateSchedule(jobname, schedule string, cmd func()) error {
+	jobs[jobname] = cmd
+
 	err := core.GetContainer().Invoke(func(p JobParams, pp core.OptionalParam[locker.Locker]) error {
 		if ScheduleDisabled {
 			p.Logger.Info("cronjob is disabled.", zap.String("job", jobname))
@@ -80,7 +101,6 @@ func CreateSchedule(jobname, schedule string, cmd func()) error {
 		entry := cr.Entry(item)
 		next := entry.Next
 		p.Logger.Info("schedule job done", zap.String("job", jobname), zap.Time("next runtime", next))
-
 		core.OnServiceStopping(func() {
 			p.Logger.Info("try to stop scheduled job.", zap.String("job", jobname))
 			cr.Stop()

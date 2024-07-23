@@ -6,6 +6,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 	"github.com/techquest-tech/gin-shared/pkg/core"
+	"github.com/techquest-tech/gin-shared/pkg/schedule"
 	"go.uber.org/dig"
 )
 
@@ -24,6 +25,16 @@ var ScheduleCmd = &cobra.Command{
 			CloseOnlyNotified()
 			core.NotifyStopping()
 			return nil
+		})
+	},
+}
+
+var RunJobCmd = &cobra.Command{
+	Use:   "job",
+	Short: "run job now",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return core.GetContainer().Invoke(func(p Schedule) error {
+			return schedule.Run(args[0])
 		})
 	},
 }
