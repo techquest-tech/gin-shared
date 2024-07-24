@@ -43,8 +43,9 @@ type GormObjSyncService struct {
 }
 
 var cfg = &gorm.Session{
-	SkipHooks: true,
-	NewDB:     true,
+	SkipHooks:              true,
+	NewDB:                  true,
+	SkipDefaultTransaction: true,
 }
 
 func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic, consumer string, raw []byte) error {

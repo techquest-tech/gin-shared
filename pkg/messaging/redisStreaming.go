@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -17,7 +18,7 @@ import (
 )
 
 const (
-	DefaultMsgLimit          = 10000
+	DefaultMsgLimit          = math.MaxInt16
 	DefaultAttKey            = "payload"
 	DefaultSchedule          = "@every 30m"
 	DefaultDeadLetterDurtion = 8 * time.Hour //if messaging pending for more than this duration, will be put to dead letter
