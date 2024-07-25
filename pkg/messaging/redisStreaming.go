@@ -55,7 +55,7 @@ func (msg *DefaultMessgingService) Pub(ctx context.Context, topic string, payloa
 		logger.Error("pub message failed.", zap.Error(resp.Err()), zap.Any("payload", payload))
 		return resp.Err()
 	}
-	logger.Info("pub message done")
+	logger.Debug("pub message done")
 	return nil
 }
 
