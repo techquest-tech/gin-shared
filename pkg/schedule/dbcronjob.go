@@ -24,6 +24,7 @@ func (job *DBCronJob) FireJob() {
 			job.logger.Error("run sql failed", zap.String("sql", item), zap.Error(result.Error))
 			return
 		}
+		job.logger.Info("run sql job done", zap.String("sql", item))
 	}
 	job.logger.Info("all sql done")
 }
