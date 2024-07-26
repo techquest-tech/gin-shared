@@ -18,6 +18,11 @@ type CachedList[T any] interface {
 	Del(ctx context.Context, key string) error
 }
 
+type Hash interface {
+	GetValues(ctx context.Context, key string, fields ...string) ([]any, error)
+	SetValues(ctx context.Context, key string, values map[string]string) error
+}
+
 type CacheProvider[T any] interface {
 	Set(key string, value T)
 	Get(key string) (T, bool)

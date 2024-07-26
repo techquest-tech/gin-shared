@@ -1,3 +1,5 @@
+//go:build !ram
+
 package cache
 
 import (
@@ -13,7 +15,7 @@ type RedisHashService struct {
 	Logger *zap.Logger
 }
 
-func NewRedisHashService(client *redis.Client, logger *zap.Logger) *RedisHashService {
+func NewRedisHashService(client *redis.Client, logger *zap.Logger) Hash {
 	return &RedisHashService{
 		Client: client,
 		Logger: logger,
