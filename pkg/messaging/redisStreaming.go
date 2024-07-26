@@ -1,3 +1,5 @@
+//go:build !ram
+
 package messaging
 
 import (
