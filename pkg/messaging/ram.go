@@ -1,4 +1,4 @@
-//go:build ram
+//go:build ram || no_messaging
 
 package messaging
 
