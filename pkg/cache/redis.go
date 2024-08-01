@@ -153,18 +153,31 @@ func (r *RedisProvider[T]) Get(key string) (T, bool) {
 	return value, false
 }
 
-// Set implements CacheProvider.
-func (r *RedisProvider[T]) Set(key string, value T) {
+type CacheWithTTL interface {
+	GetTTL() time.Duration
+}
+
+func (r *RedisProvider[T]) setAny(key string, value any) {
+	tt := r.timeout
+	if v, ok := value.(CacheWithTTL); ok {
+		tt = v.GetTTL()
+		zap.L().Info("set value with ttl", zap.Duration("ttl", tt))
+	}
 	err := r.cache.Set(&cache.Item{
 		Ctx:   context.TODO(),
 		Key:   r.prefix + key,
 		Value: value,
-		TTL:   r.timeout,
+		TTL:   tt,
 	})
 	if err != nil {
 		zap.L().Error("set cache failed.", zap.Error(err))
 	}
 	zap.L().Info("set cache done", zap.String("key", r.prefix+key))
+}
+
+// Set implements CacheProvider.
+func (r *RedisProvider[T]) Set(key string, value T) {
+	r.setAny(key, value)
 }
 
 func init() {
