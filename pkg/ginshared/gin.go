@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/asaskevich/EventBus"
@@ -68,6 +69,18 @@ type Params struct {
 	Tls         *Tlssettings
 	Startups    []core.Startup `group:"startups"`
 	Controllers []DiController `group:"controllers"`
+}
+
+func GetFullUrl(c *gin.Context) string {
+	domain := viper.GetString("domain")
+	if domain == "" {
+		domain = c.Request.Host
+	}
+	s := "http"
+	if c.Request.TLS != nil || (strings.Contains(domain, ":443") || !strings.HasPrefix(domain, "127.0.0.1")) {
+		s = "https"
+	}
+	return fmt.Sprintf("%s://%s", s, domain)
 }
 
 func Start() error {
