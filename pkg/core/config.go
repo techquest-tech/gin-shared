@@ -135,12 +135,9 @@ func InitConfig(p Bootup) error {
 		}
 	}
 
-	// if embedGenerated() {
-	// 	err := loadConfig(EmbedConfigFile)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
+	viper.AutomaticEnv()
+	replacer := strings.NewReplacer(".", "_")
+	viper.SetEnvKeyReplacer(replacer)
 
 	configName := os.Getenv("APP_CONFIG")
 	if configName == "" {
