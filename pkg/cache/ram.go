@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/samber/lo"
 )
 
 type CacheRam[T any] struct {
@@ -21,6 +22,10 @@ func (cc *CacheRam[T]) Get(key string) (T, bool) {
 	}
 	var vv T
 	return vv, false
+}
+func (cc *CacheRam[T]) Keys() []string {
+	all := cc.ram.Items()
+	return lo.Keys(all)
 }
 
 func NewRAMCacheProvider[T any](t time.Duration) *CacheRam[T] {

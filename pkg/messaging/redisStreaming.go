@@ -86,14 +86,14 @@ func (msg *DefaultMessgingService) ProcessPendings(ctx context.Context, topic, g
 	// read pendings
 	cmdPending, err := msg.Client.XPending(ctx, topic, group).Result()
 	if err != nil {
-		logger.Info("read pending message failed.", zap.Error(err))
+		logger.Error("read pending message failed.", zap.Error(err))
 		return
 	}
 	if cmdPending.Count > 0 {
 		xrangeResult, err := msg.Client.XRange(ctx, topic, cmdPending.Lower, cmdPending.Higher).Result()
 		if err != nil {
 			logger.Error("read pending message by xrange failed.", zap.String("topic", topic),
-				zap.String("start", cmdPending.Lower), zap.String("end", cmdPending.Higher))
+				zap.String("start", cmdPending.Lower), zap.String("end", cmdPending.Higher), zap.Error(err))
 			return
 		}
 		logger.Info("read pending message by xrange done.", zap.Int("count", len(xrangeResult)))

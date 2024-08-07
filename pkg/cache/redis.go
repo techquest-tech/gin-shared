@@ -102,6 +102,7 @@ func NewCacheProvider[T any](t time.Duration) CacheProvider[T] {
 			LocalCache: cache.NewTinyLFU(1000, t),
 		})
 		rr.cache = rrr
+		rr.Client = client
 	})
 	if err != nil {
 		zap.L().Error("new cache provider failed.", zap.Error(err))
@@ -114,6 +115,7 @@ type RedisProvider[T any] struct {
 	prefix  string
 	timeout time.Duration
 	cache   *cache.Cache
+	Client  *redis.Client
 }
 
 // Get implements CacheProvider.
@@ -178,6 +180,14 @@ func (r *RedisProvider[T]) setAny(key string, value any) {
 // Set implements CacheProvider.
 func (r *RedisProvider[T]) Set(key string, value T) {
 	r.setAny(key, value)
+}
+func (r *RedisProvider[T]) Keys() []string {
+	keys, err := r.Client.Keys(context.TODO(), r.prefix+"*").Result()
+	if err != nil {
+		zap.L().Error("get keys failed.", zap.Error(err))
+		return []string{}
+	}
+	return keys
 }
 
 func init() {

@@ -26,6 +26,7 @@ type Hash interface {
 type CacheProvider[T any] interface {
 	Set(key string, value T)
 	Get(key string) (T, bool)
+	Keys() []string
 }
 
 // type CacheFactory[T any] interface {
@@ -60,4 +61,7 @@ func (ct *Cache[T]) Get(key string) (T, bool) {
 	}
 	var zero T
 	return zero, false
+}
+func (ct *Cache[T]) Keys() []string {
+	return ct.cc.Keys()
 }
