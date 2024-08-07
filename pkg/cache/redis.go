@@ -182,10 +182,18 @@ func (r *RedisProvider[T]) Set(key string, value T) {
 	r.setAny(key, value)
 }
 func (r *RedisProvider[T]) Keys() []string {
-	keys, err := r.Client.Keys(context.TODO(), r.prefix+"*").Result()
+	raw, err := r.Client.Keys(context.TODO(), r.prefix+"*").Result()
 	if err != nil {
 		zap.L().Error("get keys failed.", zap.Error(err))
 		return []string{}
+	}
+	keys := make([]string, 0)
+	for _, v := range raw {
+		k := strings.TrimPrefix(v, r.prefix)
+		if k != "" {
+			keys = append(keys, k)
+		}
+
 	}
 	return keys
 }
