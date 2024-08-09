@@ -57,9 +57,9 @@ func init() {
 
 type AuthKey struct {
 	gorm.Model
-	UserName   string `gorm:"size:32"`
-	ApiKey     string `gorm:"size:64;unique"`
-	Owner      string `gorm:"size:64"`
+	UserName   string `gorm:"size:255"`
+	ApiKey     string `gorm:"size:255;unique"`
+	Owner      string `gorm:"size:255"`
 	Role       string `gorm:"size:64"`
 	Remark     string `gorm:"size:64"`
 	Suspend    bool

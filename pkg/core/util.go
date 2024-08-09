@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"runtime"
 	"sync"
 	"syscall"
@@ -106,4 +107,22 @@ func PrintVersion() {
 		zap.String("verion", Version),
 		zap.String("Go version", runtime.Version()),
 	)
+}
+
+func Clone(original any, target any) error {
+	if reflect.TypeOf(target).Kind() != reflect.Ptr || reflect.TypeOf(original).Kind() != reflect.Ptr {
+		return fmt.Errorf("original and target must be a pointer")
+	}
+	value := reflect.ValueOf(original).Elem()
+	clone := reflect.ValueOf(target).Elem()
+
+	for i := 0; i < value.NumField(); i++ {
+		field := value.Field(i)
+		targetField := clone.Field(i)
+		if targetField.IsZero() && !field.IsZero() {
+			targetField.Set(field)
+		}
+	}
+
+	return nil
 }
