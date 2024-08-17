@@ -19,6 +19,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var DefaultLocalCacheItems = 5000 //local cache items. it's important for performance & if redis failed.
+
 type RedisConfig struct {
 	Host    string
 	Port    uint
@@ -99,7 +101,7 @@ func NewCacheProvider[T any](t time.Duration) CacheProvider[T] {
 	err := core.GetContainer().Invoke(func(client *redis.Client) {
 		rrr := cache.New(&cache.Options{
 			Redis:      client,
-			LocalCache: cache.NewTinyLFU(1000, t),
+			LocalCache: cache.NewTinyLFU(DefaultLocalCacheItems, t),
 		})
 		rr.cache = rrr
 		rr.Client = client
@@ -196,6 +198,9 @@ func (r *RedisProvider[T]) Keys() []string {
 
 	}
 	return keys
+}
+func (r *RedisProvider[T]) Del(key string) error {
+	return r.cache.Delete(context.TODO(), r.prefix+key)
 }
 
 func init() {

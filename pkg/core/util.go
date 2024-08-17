@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/signal"
@@ -125,4 +127,11 @@ func Clone(original any, target any) error {
 	}
 
 	return nil
+}
+
+func MD5(raw []byte) string {
+	h := md5.New()
+	h.Write(raw)
+	signed := hex.EncodeToString(h.Sum(nil))
+	return signed
 }

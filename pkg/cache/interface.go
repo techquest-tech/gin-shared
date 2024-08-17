@@ -26,6 +26,7 @@ type Hash interface {
 type CacheProvider[T any] interface {
 	Set(key string, value T)
 	Get(key string) (T, bool)
+	Del(key string) error
 	Keys() []string
 }
 
@@ -64,4 +65,7 @@ func (ct *Cache[T]) Get(key string) (T, bool) {
 }
 func (ct *Cache[T]) Keys() []string {
 	return ct.cc.Keys()
+}
+func (ct *Cache[T]) Del(key string) error {
+	return ct.cc.Del(key)
 }

@@ -2,12 +2,11 @@ package ginshared
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/hex"
 	"io"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 )
 
 func DropDuplicated(raw []string) []string {
@@ -33,9 +32,4 @@ func CloneRequestBody(c *gin.Context) []byte {
 	return buf
 }
 
-func MD5(raw []byte) string {
-	h := md5.New()
-	h.Write(raw)
-	signed := hex.EncodeToString(h.Sum(nil))
-	return signed
-}
+var MD5 = core.MD5

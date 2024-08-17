@@ -27,6 +27,10 @@ func (cc *CacheRam[T]) Keys() []string {
 	all := cc.ram.Items()
 	return lo.Keys(all)
 }
+func (cc *CacheRam[T]) Del(key string) error {
+	cc.ram.Delete(key)
+	return nil
+}
 
 func NewRAMCacheProvider[T any](t time.Duration) *CacheRam[T] {
 	rr := &CacheRam[T]{
