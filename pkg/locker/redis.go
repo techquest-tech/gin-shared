@@ -55,7 +55,7 @@ func (r *RedisLocker) LockWithtimeout(ctx context.Context, resource string, time
 }
 
 func (r *RedisLocker) Lock(ctx context.Context, resource string) (Release, error) {
-	return r.LockWithtimeout(ctx, resource, 0)
+	return r.LockWithtimeout(ctx, resource, 10*time.Second)
 }
 
 func InitRedisLocker(logger *zap.Logger, client *redis.Client) Locker {
