@@ -23,6 +23,10 @@ func NewRedisHashService(client *redis.Client, logger *zap.Logger) Hash {
 }
 
 func (rs *RedisHashService) GetValues(ctx context.Context, key string, fields ...string) ([]any, error) {
+	if len(fields) == 0 {
+		rs.Logger.Warn("no fields to get redis hash")
+		return nil, nil
+	}
 	resp, err := rs.Client.HMGet(ctx, key, fields...).Result()
 	if err != nil {
 		rs.Logger.Error("failed to get values from redis", zap.Error(err))
