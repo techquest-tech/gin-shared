@@ -2,7 +2,6 @@ package schedule
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/asaskevich/EventBus"
@@ -13,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var LockerTimeout = 50 * time.Millisecond
+var LockerTimeout = time.Hour
 
 type ScheduleLoker struct {
 	Locker  locker.Locker
@@ -27,15 +26,16 @@ func (sl *ScheduleLoker) Wrapper() cron.JobWrapper {
 			ctx := context.TODO()
 			// startAt := time.Now()
 			logger := zap.L().With(zap.String("Jobname", sl.Jobname))
-			logger.Debug("try to get locker", zap.String("locker", fmt.Sprintf("%T", sl.Locker)))
+			// logger.Debug("try to get locker", zap.String("locker", fmt.Sprintf("%T", sl.Locker)))
 			release, err := sl.Locker.LockWithtimeout(ctx, sl.Jobname, LockerTimeout)
 			if err != nil {
 				logger.Info("get locker failed. job cancel.", zap.Error(err))
 				// return
 				panic("get locker failed. job cancel.")
+				// return
 			}
 			defer release(ctx)
-			logger.Debug("got locker")
+			// logger.Debug("got locker")
 			j.Run()
 			// dur := time.Since(startAt)
 			// logger.Info("job done.", zap.Duration("duration", dur))
