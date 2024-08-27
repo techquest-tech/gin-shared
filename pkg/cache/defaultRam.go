@@ -22,6 +22,10 @@ type LocalRamHash struct {
 	ram sync.Map
 }
 
+func (lhash *LocalRamHash) SetTTL(ctx context.Context, key string, ttl time.Duration) {
+
+}
+
 func (lhash *LocalRamHash) GetValues(ctx context.Context, key string, fields ...string) ([]any, error) {
 	result := make([]any, len(fields))
 	for index, item := range fields {
@@ -31,7 +35,7 @@ func (lhash *LocalRamHash) GetValues(ctx context.Context, key string, fields ...
 	}
 	return result, nil
 }
-func (lhash *LocalRamHash) SetValues(ctx context.Context, key string, values map[string]string) error {
+func (lhash *LocalRamHash) SetValues(ctx context.Context, key string, values map[string]any) error {
 	for k, v := range values {
 		lhash.ram.Store(key+k, v)
 	}

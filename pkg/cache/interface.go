@@ -19,8 +19,9 @@ type CachedList[T any] interface {
 }
 
 type Hash interface {
+	SetTTL(ctx context.Context, key string, ttl time.Duration)
 	GetValues(ctx context.Context, key string, fields ...string) ([]any, error)
-	SetValues(ctx context.Context, key string, values map[string]string) error
+	SetValues(ctx context.Context, key string, values map[string]any) error
 }
 
 type CacheProvider[T any] interface {

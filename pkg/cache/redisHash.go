@@ -4,6 +4,7 @@ package cache
 
 import (
 	"context"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/techquest-tech/gin-shared/pkg/core"
@@ -22,6 +23,10 @@ func NewRedisHashService(client *redis.Client, logger *zap.Logger) Hash {
 	}
 }
 
+func (rs *RedisHashService) SetTTL(ctx context.Context, key string, ttl time.Duration) {
+	rs.Client.Expire(ctx, key, ttl)
+}
+
 func (rs *RedisHashService) GetValues(ctx context.Context, key string, fields ...string) ([]any, error) {
 	if len(fields) == 0 {
 		rs.Logger.Warn("no fields to get redis hash")
@@ -35,7 +40,7 @@ func (rs *RedisHashService) GetValues(ctx context.Context, key string, fields ..
 	return resp, nil
 }
 
-func (rs *RedisHashService) SetValues(ctx context.Context, key string, values map[string]string) error {
+func (rs *RedisHashService) SetValues(ctx context.Context, key string, values map[string]any) error {
 	if len(values) == 0 {
 		rs.Logger.Warn("no values to set redis hash")
 		return nil
