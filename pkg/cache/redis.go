@@ -77,6 +77,12 @@ func NewRedisClient(logger *zap.Logger) *redis.Client {
 	return client
 }
 
+type CacheConfig struct {
+	Disalbed   bool
+	LocalItems int
+	TTL        time.Duration
+}
+
 func NewCacheProvider[T any](t time.Duration) CacheProvider[T] {
 	rr := &RedisProvider[T]{
 		// prefix:  randstr.Hex(4) + "-",
@@ -96,13 +102,39 @@ func NewCacheProvider[T any](t time.Duration) CacheProvider[T] {
 	}
 	to := strings.LastIndexByte(tname, ']')
 
-	rr.prefix = tname[from:to] + "-"
+	prefix := tname[from:to]
+
+	rr.prefix = prefix + "-"
+
+	localItem := DefaultLocalCacheItems
+
+	sub := viper.Sub("cache." + prefix)
+	if sub != nil {
+		cfg := &CacheConfig{}
+		sub.Unmarshal(cfg)
+		if cfg.Disalbed {
+			zap.L().Info("cache disabled", zap.String("prefix", rr.prefix))
+			return &DisabledCache[T]{prefix: rr.prefix}
+		}
+		// if cfg.LocalItems > 0 {
+		zap.L().Info("local cache enabled", zap.String("prefix", rr.prefix))
+		localItem = cfg.LocalItems
+		// }
+		if cfg.TTL > 0 {
+			zap.L().Info("cache ttl set to", zap.String("prefix", rr.prefix), zap.Duration("ttl", cfg.TTL))
+			rr.timeout = cfg.TTL
+		}
+	}
 
 	err := core.GetContainer().Invoke(func(client *redis.Client) {
-		rrr := cache.New(&cache.Options{
-			Redis:      client,
-			LocalCache: cache.NewTinyLFU(DefaultLocalCacheItems, t),
-		})
+		opt := &cache.Options{
+			Redis: client,
+			// LocalCache: cache.NewTinyLFU(localItem, t),
+		}
+		if localItem > 0 {
+			opt.LocalCache = cache.NewTinyLFU(localItem, t)
+		}
+		rrr := cache.New(opt)
 		rr.cache = rrr
 		rr.Client = client
 	})
@@ -111,6 +143,27 @@ func NewCacheProvider[T any](t time.Duration) CacheProvider[T] {
 		// panic(err)
 	}
 	return rr
+}
+
+type DisabledCache[T any] struct {
+	prefix string
+}
+
+func (dd *DisabledCache[T]) Set(key string, value T) {
+	zap.L().Debug("cache disabled", zap.String("prefix", dd.prefix))
+}
+func (dd *DisabledCache[T]) Keys() []string {
+	zap.L().Debug("cache disabled", zap.String("prefix", dd.prefix))
+	return []string{}
+}
+func (dd *DisabledCache[T]) Get(key string) (T, bool) {
+	zap.L().Debug("cache disabled", zap.String("prefix", dd.prefix))
+	var zero T
+	return zero, false
+}
+func (dd *DisabledCache[T]) Del(key string) error {
+	zap.L().Debug("cache disabled", zap.String("prefix", dd.prefix))
+	return nil
 }
 
 type RedisProvider[T any] struct {
