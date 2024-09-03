@@ -19,6 +19,7 @@ type CachedList[T any] interface {
 }
 
 type Hash interface {
+	Existed(ctx context.Context, key string) (bool, error)
 	SetTTL(ctx context.Context, key string, ttl time.Duration)
 	GetValues(ctx context.Context, key string, fields ...string) ([]any, error)
 	SetValues(ctx context.Context, key string, values map[string]any) error

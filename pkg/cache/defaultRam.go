@@ -9,6 +9,7 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	"github.com/techquest-tech/gin-shared/pkg/core"
+	"go.uber.org/zap"
 )
 
 func NewCacheProvider[T any](t time.Duration) CacheProvider[T] {
@@ -22,8 +23,11 @@ type LocalRamHash struct {
 	ram sync.Map
 }
 
+func (lhash *LocalRamHash) Existed(ctx context.Context, key string) (bool, error) {
+	return true, nil
+}
 func (lhash *LocalRamHash) SetTTL(ctx context.Context, key string, ttl time.Duration) {
-
+	zap.L().Info("local hash doesn't support TTL")
 }
 
 func (lhash *LocalRamHash) GetValues(ctx context.Context, key string, fields ...string) ([]any, error) {

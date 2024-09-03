@@ -23,6 +23,14 @@ func NewRedisHashService(client *redis.Client, logger *zap.Logger) Hash {
 	}
 }
 
+func (rs *RedisHashService) Existed(ctx context.Context, key string) (bool, error) {
+	rr := rs.Client.Exists(ctx, key)
+	if rr.Err() != nil {
+		return false, rr.Err()
+	}
+	return rr.Val() > 0, nil
+}
+
 func (rs *RedisHashService) SetTTL(ctx context.Context, key string, ttl time.Duration) {
 	rs.Client.Expire(ctx, key, ttl)
 }
