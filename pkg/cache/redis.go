@@ -19,7 +19,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var DefaultLocalCacheItems = 5000 //local cache items. it's important for performance & if redis failed.
+var DefaultLocalCacheItems = 0 //local cache items. it's important for performance & if redis failed.
 
 type RedisConfig struct {
 	Host    string
