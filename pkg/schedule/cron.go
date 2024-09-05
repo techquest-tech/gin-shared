@@ -81,7 +81,7 @@ func CreateSchedule(jobname, schedule string, cmd func()) error {
 		opts := []cron.JobWrapper{cron.Recover(l), cron.SkipIfStillRunning(l), CheckIfEnabled()}
 
 		if JobHistoryEnabled && p.Bus != nil {
-			opts = append(opts, Withhistory(p.Bus, jobname))
+			opts = append(opts, Withhistory(jobname))
 		}
 
 		if ScheduleLockerEnabled && pp.P != nil {

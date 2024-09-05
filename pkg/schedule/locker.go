@@ -2,6 +2,7 @@ package schedule
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/asaskevich/EventBus"
@@ -20,6 +21,8 @@ type ScheduleLoker struct {
 	Jobname string
 }
 
+var errlockerFailed = errors.New("get locker failed")
+
 func (sl *ScheduleLoker) Wrapper() cron.JobWrapper {
 	return func(j cron.Job) cron.Job {
 		return cron.FuncJob(func() {
@@ -30,9 +33,7 @@ func (sl *ScheduleLoker) Wrapper() cron.JobWrapper {
 			release, err := sl.Locker.LockWithtimeout(ctx, sl.Jobname, LockerTimeout)
 			if err != nil {
 				logger.Info("get locker failed. job cancel.", zap.Error(err))
-				// return
-				panic("get locker failed. job cancel.")
-				// return
+				panic(errlockerFailed)
 			}
 			defer release(ctx)
 			// logger.Debug("got locker")
