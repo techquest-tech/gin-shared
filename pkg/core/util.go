@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -127,6 +128,29 @@ func Clone(original any, target any) error {
 	}
 
 	return nil
+}
+
+func ToMd5(items ...any) string {
+	if len(items) == 0 {
+		return ""
+	}
+	h := md5.New()
+	for _, item := range items {
+		if b, ok := item.([]byte); ok {
+			h.Write(b)
+		} else if s, ok := item.(string); ok {
+			h.Write([]byte(s))
+		} else {
+			raw, err := json.Marshal(item)
+			if err != nil {
+				zap.L().Error("json marshal for idempotent failed", zap.Error(err))
+				panic(err)
+			}
+			h.Write(raw)
+		}
+	}
+	signed := hex.EncodeToString(h.Sum(nil))
+	return signed
 }
 
 func MD5(raw []byte) string {
