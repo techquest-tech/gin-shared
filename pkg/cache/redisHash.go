@@ -32,7 +32,12 @@ func (rs *RedisHashService) Existed(ctx context.Context, key string) (bool, erro
 }
 
 func (rs *RedisHashService) SetTTL(ctx context.Context, key string, ttl time.Duration) {
-	rs.Client.Expire(ctx, key, ttl)
+	r, err := rs.Client.Expire(ctx, key, ttl).Result()
+	if err != nil {
+		rs.Logger.Error("redis hash set ttl failed", zap.String("key", key), zap.Error(err))
+		return
+	}
+	rs.Logger.Info("set ttl result", zap.Bool("result", r), zap.Duration("ttl", ttl))
 }
 
 func (rs *RedisHashService) GetValues(ctx context.Context, key string, fields ...string) ([]any, error) {

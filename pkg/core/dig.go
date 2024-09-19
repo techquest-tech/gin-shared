@@ -55,3 +55,13 @@ type OptionalParam[T any] struct {
 	dig.In
 	P T `optional:"true"`
 }
+
+func GetService[T any]() T {
+	var result T
+	if err := GetContainer().Invoke(func(param OptionalParam[T]) {
+		result = param.P
+	}); err != nil {
+		panic(err)
+	}
+	return result
+}
