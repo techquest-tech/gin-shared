@@ -34,6 +34,14 @@ var RunJobCmd = &cobra.Command{
 	Short: "run job now",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return core.GetContainer().Invoke(func(p Schedule) error {
+			if len(args) == 0 {
+				keys := schedule.List()
+				println("available jobs:")
+				for _, k := range keys {
+					println(k)
+				}
+				return nil
+			}
 			return schedule.Run(args[0])
 		})
 	},

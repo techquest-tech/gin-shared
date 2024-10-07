@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/schedule"
 	"go.uber.org/zap"
@@ -192,6 +193,10 @@ func init() {
 		d := &DefaultMessgingService{
 			Client: client,
 			Logger: logger,
+		}
+		sub := viper.Sub("messaging")
+		if sub != nil {
+			sub.Unmarshal(d)
 		}
 		return d, d
 	})

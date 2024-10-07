@@ -111,8 +111,8 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 type GormAction string
 
 const (
-	GormActionSave   = "save"
-	GormActionDelete = "delete"
+	GormActionSave   GormAction = "save"
+	GormActionDelete GormAction = "delete"
 )
 
 type GormPayload struct {

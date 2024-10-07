@@ -5,6 +5,7 @@ import (
 
 	"github.com/asaskevich/EventBus"
 	"github.com/robfig/cron/v3"
+	"github.com/samber/lo"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/locker"
 	"go.uber.org/dig"
@@ -65,6 +66,10 @@ func Run(jobname string) (err error) {
 		return nil
 	}
 	return fmt.Errorf("job %s not found", jobname)
+}
+
+func List() []string {
+	return lo.Keys(jobs)
 }
 
 func CreateSchedule(jobname, schedule string, cmd func()) error {
