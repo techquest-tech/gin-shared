@@ -141,7 +141,8 @@ func PubGormDeleted(ctx context.Context, payload any) error {
 			return nil
 		}
 	}
-	return pubGormAction(ctx, payload, GormActionDelete)
+	go pubGormAction(ctx, payload, GormActionDelete)
+	return nil
 }
 
 type IDbase interface {
@@ -161,5 +162,6 @@ func pubGormAction(ctx context.Context, payload any, action GormAction) error {
 	key := tt.String()
 	key = strings.TrimLeft(key, "*")
 
-	return ms.Pub(ctx, DefaultGormToipc, GormPayload{Key: key, Payload: raw, Action: action})
+	go ms.Pub(ctx, DefaultGormToipc, GormPayload{Key: key, Payload: raw, Action: action})
+	return nil
 }

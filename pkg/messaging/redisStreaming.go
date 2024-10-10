@@ -196,8 +196,17 @@ func init() {
 		}
 		sub := viper.Sub("messaging")
 		if sub != nil {
+			logger.Info("get settings.", zap.Any("keys", sub.AllKeys()))
 			sub.Unmarshal(d)
+			startIndex := len("settings.")
+			for _, key := range sub.AllKeys() {
+				logger.Info("get setting.", zap.String("key", key), zap.Any("value", sub.Get(key)))
+				k := key[startIndex:]
+				value := sub.GetInt64(key)
+				d.Settings[k] = value
+			}
 		}
+
 		return d, d
 	})
 }
