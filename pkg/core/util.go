@@ -130,6 +130,10 @@ func Clone(original any, target any) error {
 	return nil
 }
 
+type Md5Value interface {
+	ToMd5() []byte
+}
+
 func ToMd5(items ...any) string {
 	if len(items) == 0 {
 		return ""
@@ -140,6 +144,8 @@ func ToMd5(items ...any) string {
 			h.Write(b)
 		} else if s, ok := item.(string); ok {
 			h.Write([]byte(s))
+		} else if impled, ok := item.(Md5Value); ok {
+			h.Write(impled.ToMd5())
 		} else {
 			raw, err := json.Marshal(item)
 			if err != nil {
