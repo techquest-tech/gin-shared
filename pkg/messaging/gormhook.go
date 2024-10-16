@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
+	"github.com/samber/lo"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -141,7 +144,7 @@ func PubGormDeleted(ctx context.Context, payload any) error {
 			return nil
 		}
 	}
-	go pubGormAction(ctx, payload, GormActionDelete)
+	pubGormAction(ctx, payload, GormActionDelete)
 	return nil
 }
 
@@ -162,6 +165,83 @@ func pubGormAction(ctx context.Context, payload any, action GormAction) error {
 	key := tt.String()
 	key = strings.TrimLeft(key, "*")
 
-	go ms.Pub(ctx, DefaultGormToipc, GormPayload{Key: key, Payload: raw, Action: action})
+	ms.Pub(ctx, DefaultGormToipc, GormPayload{Key: key, Payload: raw, Action: action})
 	return nil
+}
+
+var SyncPageSize = 1000
+
+// func ToSnake(raw string) string {
+// 	parts := strings.Split(raw, "_")
+// 	result := ""
+// 	for _, item := range parts {
+// 		if item == "id" {
+// 			result = result + "ID"
+// 		} else {
+// 			result = result + strings.ToUpper(item[:1]) + item[1:]
+// 		}
+
+// 	}
+// 	return result
+// }
+// func ToSnakeMap(raw map[string]any) map[string]any {
+// 	result := make(map[string]any)
+// 	for k, v := range raw {
+// 		result[ToSnake(k)] = v
+// 	}
+// 	return result
+// }
+
+func PubEntitiesSince(ctx context.Context, key string, since time.Time) error {
+	return core.GetContainer().Invoke(func(db *gorm.DB, logger *zap.Logger, msService MessagingService) error {
+		if ms == nil {
+			ms = msService
+		}
+		l := logger.With(zap.String("key", key))
+		tt, ok := m[key]
+		if !ok {
+			keys := lo.Keys(m)
+			return fmt.Errorf("%s is not registered, avaible keys %v", key, keys)
+		}
+		payload := reflect.New(tt).Interface()
+
+		index := 0
+
+		for {
+			tx := db.WithContext(ctx).Model(payload).Order("updated_at").Limit(SyncPageSize).Offset(index * SyncPageSize)
+
+			if !since.IsZero() {
+				tx = tx.Where("updated_at > ?", since)
+			}
+
+			rr := make([]any, SyncPageSize)
+			for i := 0; i < SyncPageSize; i++ {
+				rr[i] = reflect.New(tt).Interface()
+			}
+
+			// rr := make([]map[string]any, 0)
+			if err := tx.Find(&rr).Error; err != nil {
+				return err
+			}
+			if len(rr) == 0 {
+				l.Info("no more data")
+				break
+			}
+			// l.Info("result len", zap.Int("len", len(rr)))
+			// for _, m := range rr {
+			// 	item := reflect.New(tt).Interface()
+			// 	snakem := ToSnakeMap(m)
+			// 	err := mapstructure.Decode(snakem, item)
+			// 	if err != nil {
+			// 		l.Error("decode failed", zap.Error(err))
+			// 		return err
+			// 	}
+			// 	PubGormSaved(ctx, item)
+			// }
+
+			index++
+		}
+
+		return nil
+	})
 }
