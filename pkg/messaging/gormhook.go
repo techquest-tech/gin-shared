@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/samber/lo"
@@ -133,40 +132,8 @@ func toKeyAndPayload(raw []byte) (*GormPayload, error) {
 	return &payload, nil
 }
 
-func PubGormSaved(ctx context.Context, payload any) error {
-	return pubGormAction(ctx, payload, GormActionSave)
-}
-
-func PubGormDeleted(ctx context.Context, payload any) error {
-	if tt, ok := payload.(IDbase); ok {
-		if tt.GetID() == 0 {
-			zap.L().Warn("empty entity, just skip")
-			return nil
-		}
-	}
-	pubGormAction(ctx, payload, GormActionDelete)
-	return nil
-}
-
 type IDbase interface {
 	GetID() uint
-}
-
-func pubGormAction(ctx context.Context, payload any, action GormAction) error {
-	if !GormMessagingEnabled {
-		return nil
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	tt := reflect.TypeOf(payload)
-	key := tt.String()
-	key = strings.TrimLeft(key, "*")
-
-	ms.Pub(ctx, DefaultGormToipc, GormPayload{Key: key, Payload: raw, Action: action})
-	return nil
 }
 
 const SyncPageSize = 1000
@@ -220,7 +187,5 @@ func PubEntitiesSince(ctx context.Context, key string, since time.Time) error {
 				return nil
 			}
 		}
-
-		// return nil
 	})
 }
