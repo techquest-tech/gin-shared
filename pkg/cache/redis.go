@@ -39,6 +39,8 @@ func NewRedisClient(logger *zap.Logger) *redis.Client {
 	}
 	if subRedis != nil {
 		subRedis.Unmarshal(cfg)
+		DefaultLocalCacheItems = subRedis.GetInt("localItem")
+		logger.Info("load item value done", zap.Int("localItem", DefaultLocalCacheItems))
 	}
 	if cfg.Host != "" {
 		opts.Addr = fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
@@ -74,6 +76,7 @@ func NewRedisClient(logger *zap.Logger) *redis.Client {
 
 	client := redis.NewClient(opts)
 	logger.Info("connected to redis", zap.String("redis", opts.Addr))
+
 	return client
 }
 

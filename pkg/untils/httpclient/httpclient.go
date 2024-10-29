@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// @deprecated use monitor.LogOutbound
 func RequestWithRetry(req *http.Request, result interface{}, body ...string) error {
 	log := zap.L().With(zap.String("service", "clientWithRetry"))
 
