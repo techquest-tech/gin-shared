@@ -11,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
-	"github.com/techquest-tech/gin-shared/pkg/cache"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"github.com/techquest-tech/gin-shared/pkg/orm"
@@ -35,11 +34,11 @@ func init() {
 	orm.AppendEntity(&AuthKey{})
 
 	core.GetContainer().Provide(func(ap AuthServiceParam) *AuthService {
-		c := cache.New[*AuthKey]()
+		// c := cache.New[*AuthKey]()
 		authService := &AuthService{
-			Db:        ap.DB,
-			logger:    ap.Logger,
-			userCache: c,
+			Db:     ap.DB,
+			logger: ap.Logger,
+			// userCache: c,
 			HeaderKey: "apiKey",
 		}
 		authSetting := viper.Sub("auth")
@@ -67,10 +66,10 @@ type AuthKey struct {
 }
 
 type AuthService struct {
-	Db        *gorm.DB
-	logger    *zap.Logger
-	Keys      []string
-	userCache *cache.Cache[*AuthKey]
+	Db     *gorm.DB
+	logger *zap.Logger
+	Keys   []string
+	// userCache *cache.Cache[*AuthKey]
 	HeaderKey string
 }
 
@@ -101,12 +100,12 @@ func Hash(rawKey string) string {
 
 func (a *AuthService) Validate(key string) (*AuthKey, bool) {
 	hashed := Hash(key)
-	authkey, found := a.userCache.Get(hashed)
+	// authkey, found := a.userCache.Get(hashed)
 
-	if found {
-		zap.L().Debug("authed apikey from cached. return true")
-		return authkey, true
-	}
+	// if found {
+	// 	zap.L().Debug("authed apikey from cached. return true")
+	// 	return authkey, true
+	// }
 
 	for index, k := range a.Keys {
 		if k == hashed {
@@ -123,7 +122,7 @@ func (a *AuthService) Validate(key string) (*AuthKey, bool) {
 				Owner:  owner,
 				Role:   "admin",
 			}
-			a.userCache.Set(hashed, c)
+			// a.userCache.Set(hashed, c)
 			return c, true
 		}
 	}
@@ -133,16 +132,16 @@ func (a *AuthService) Validate(key string) (*AuthKey, bool) {
 		return nil, false
 	}
 
-	if !found {
-		authkey = &AuthKey{}
-		err := a.Db.First(authkey, "api_key = ?", hashed).Error
+	// if !found {
+	authkey := &AuthKey{}
+	err := a.Db.First(authkey, "api_key = ?", hashed).Error
 
-		if err != nil {
-			a.logger.Error("sql query error", zap.Any("error", err))
-			return nil, false
-		}
-		a.logger.Debug("found hashed key in DB", zap.Uint("userID", authkey.ID))
+	if err != nil {
+		a.logger.Error("sql query error", zap.Any("error", err))
+		return nil, false
 	}
+	a.logger.Debug("found hashed key in DB", zap.Uint("userID", authkey.ID))
+	// }
 
 	if authkey.Suspend {
 		a.logger.Error("apiKey has been suspend", zap.String("apiKey", hashed))
@@ -154,7 +153,7 @@ func (a *AuthService) Validate(key string) (*AuthKey, bool) {
 	}
 	a.logger.Info("validate apiKey done")
 
-	a.userCache.Set(hashed, authkey)
+	// a.userCache.Set(hashed, authkey)
 
 	return authkey, true
 }

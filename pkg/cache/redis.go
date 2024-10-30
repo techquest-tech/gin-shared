@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -131,7 +132,9 @@ func NewCacheProvider[T any](t time.Duration) CacheProvider[T] {
 
 	err := core.GetContainer().Invoke(func(client *redis.Client) {
 		opt := &cache.Options{
-			Redis: client,
+			Redis:     client,
+			Marshal:   json.Marshal,
+			Unmarshal: json.Unmarshal,
 			// LocalCache: cache.NewTinyLFU(localItem, t),
 		}
 		if localItem > 0 {
