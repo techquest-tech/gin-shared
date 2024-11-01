@@ -23,6 +23,8 @@ const (
 	EventJobFailed   = "event.job.failed"
 )
 
+var JobHistoryAdaptor = core.NewChanAdaptor[*JobHistory](1000)
+
 type JobHistory struct {
 	Job      string
 	Start    time.Time
@@ -62,9 +64,11 @@ func (p *JobHistoryProvider) GetLastDoneJobHistory(jobname string) *JobHistory {
 	return nil
 }
 func (p *JobHistoryProvider) SetJobhistory(h *JobHistory) {
-	if p.Bus != nil {
-		p.Bus.Publish(EventJobFinished, h)
-	}
+	// if p.Bus != nil {
+	// 	p.Bus.Publish(EventJobFinished, h)
+	// }
+	JobHistoryAdaptor.Push(h)
+
 	if !h.Succeed {
 		return
 	}

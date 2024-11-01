@@ -15,6 +15,8 @@ type ChanAdaptor[T any] struct {
 	locker    sync.Mutex
 }
 
+type Handler[T any] func(data T)
+
 func NewChanAdaptor[T any](buf int) *ChanAdaptor[T] {
 	if buf == 0 {
 		buf = 1
@@ -30,7 +32,7 @@ func (ca *ChanAdaptor[T]) Push(data T) {
 	ca.sender <- data
 }
 
-func (ca *ChanAdaptor[T]) Subscripter(receiver string) chan T {
+func (ca *ChanAdaptor[T]) Subscripter(receiver string, fn Handler[T]) chan T {
 	ca.locker.Lock()
 	defer ca.locker.Unlock()
 	if receiver == "" {
@@ -42,6 +44,15 @@ func (ca *ChanAdaptor[T]) Subscripter(receiver string) chan T {
 	c := make(chan T)
 	ca.receivers[receiver] = c
 	zap.L().Info("receiver suscribed", zap.String("receiver", receiver))
+
+	if fn != nil {
+		go func() {
+			for v := range c {
+				fn(v)
+			}
+		}()
+	}
+
 	return c
 }
 
@@ -58,3 +69,5 @@ func (ca *ChanAdaptor[T]) Start() {
 	}
 	zap.L().Info("chanAdaptor stopped")
 }
+
+var ErrorAdaptor = NewChanAdaptor[error](1000)

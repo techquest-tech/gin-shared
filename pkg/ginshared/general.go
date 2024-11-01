@@ -45,13 +45,15 @@ func (handle *ReportError) Middleware(c *gin.Context) {
 			// n := runtime.Stack(buffer, false)
 			// fmt.Printf("recover from panic: \n %s", string(buffer[:n]))
 			fmt.Printf("recover from panic: \n %s", debug.Stack())
-
-			if _, ok := err.(error); !ok {
-				err = fmt.Errorf("%v", err)
+			var e error
+			e, ok := err.(error)
+			if !ok {
+				e = fmt.Errorf("%v", err)
 			}
-			if core.Bus != nil {
-				core.Bus.Publish(core.EventError, err)
-			}
+			core.ErrorAdaptor.Push(e)
+			// if core.Bus != nil {
+			// 	core.Bus.Publish(core.EventError, err)
+			// }
 			handle.RespErrorToClient(c, err)
 		}
 	}()
