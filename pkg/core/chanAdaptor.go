@@ -67,7 +67,7 @@ func (ca *ChanAdaptor[T]) Start() {
 	for _, c := range ca.receivers {
 		close(c)
 	}
-	zap.L().Info("chanAdaptor stopped")
+	zap.L().Info("chanAdaptor and receivers were stopped.")
 }
 
 var ErrorAdaptor = NewChanAdaptor[error](1000)
