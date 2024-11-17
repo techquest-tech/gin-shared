@@ -13,9 +13,9 @@ import (
 
 func init() {
 	core.ProvideStartup(func(ms MessagingService, db *gorm.DB) core.Startup {
-		db.Callback().Create().Register("messaging", messageCallbackForUpdate)
-		db.Callback().Update().Register("messaging", messageCallbackForUpdate)
-		db.Callback().Delete().Register("messaging", messageCallbackForDelete)
+		db.Callback().Create().After("gorm:after_create").Register("messaging", messageCallbackForUpdate)
+		db.Callback().Update().After("gorm:after_update").Register("messaging", messageCallbackForUpdate)
+		db.Callback().Delete().After("gorm:delete").Register("messaging", messageCallbackForDelete)
 		return nil
 	})
 }
@@ -25,23 +25,31 @@ func PubGormSaved(ctx context.Context, payload any) error {
 }
 
 func PubGormDeleted(ctx context.Context, payload any) error {
-	if tt, ok := payload.(IDbase); ok {
-		if tt.GetID() == 0 {
-			zap.L().Warn("empty entity, just skip")
-			return nil
-		}
-	}
 	pubGormAction(ctx, payload, GormActionDelete)
 	return nil
+}
+
+// try to get payload ID value as uint, return false if payload doesn't have ID field
+func GetPayloadID(payload any) (uint, bool) {
+	if payload == nil {
+		return 0, false
+	}
+	vv := reflect.ValueOf(payload)
+	if vv.Kind() == reflect.Ptr {
+		vv = vv.Elem()
+	}
+
+	if vvv := vv.FieldByName("ID"); vvv.IsValid() {
+		id := vvv.Interface().(uint)
+		return id, true
+	}
+
+	return 0, false
 }
 
 func pubGormAction(ctx context.Context, payload any, action GormAction) error {
 	if !GormMessagingEnabled {
 		return nil
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return err
 	}
 
 	tt := reflect.TypeOf(payload)
@@ -53,7 +61,21 @@ func pubGormAction(ctx context.Context, payload any, action GormAction) error {
 		return nil
 	}
 
+	logger := zap.L().With(zap.String("topic", DefaultGormToipc), zap.Any("callback", string(action)), zap.String("key", key))
+
+	id, hasID := GetPayloadID(payload)
+	if hasID && id == 0 {
+		logger.Warn("empty ID, just skip")
+		return nil
+	}
+
+	logger.Debug("running callback.", zap.Any("payload", payload))
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
 	ms.Pub(ctx, DefaultGormToipc, GormPayload{Key: key, Payload: raw, Action: action})
+	logger.Debug("callback done.")
 	return nil
 }
 

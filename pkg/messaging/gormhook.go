@@ -35,7 +35,7 @@ func NewGormObjSyncService(ms MessagingService, logger *zap.Logger, db *gorm.DB)
 	}
 }
 
-type Sharding func(tx *gorm.DB, payload any) (tablename string, err error)
+type Sharding func(tx *gorm.DB, key string, payload any) (tablename string, err error)
 
 type GormObjSyncService struct {
 	MessageService MessagingService
@@ -69,8 +69,10 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 	}
 	tx := ss.DB.Session(cfg)
 
+	id, hasID := GetPayloadID(payload)
+
 	if ss.Sharding != nil {
-		tablename, err := ss.Sharding(tx, payload)
+		tablename, err := ss.Sharding(tx, kp.Key, payload)
 		if err != nil {
 			return err
 		}
@@ -87,18 +89,13 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 		}
 		ss.Logger.Info("save object done.", zap.String("data", tt.Name()))
 	case GormActionDelete:
+		if hasID && id == 0 {
+			ss.Logger.Warn("empty ID for delete action, just ignore it.")
+			return nil
+		}
 		err = tx.Delete(payload).Error
 		if err != nil {
 			ss.Logger.Error("delete object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
-
-			if tt, ok := payload.(IDbase); ok {
-				id := tt.GetID()
-				if id == 0 {
-					ss.Logger.Warn("empty entity, just skip")
-					return nil
-				}
-			}
-
 			return err
 		}
 		ss.Logger.Info("delete object done.", zap.String("data", tt.Name()))
@@ -130,10 +127,6 @@ func toKeyAndPayload(raw []byte) (*GormPayload, error) {
 		return nil, err
 	}
 	return &payload, nil
-}
-
-type IDbase interface {
-	GetID() uint
 }
 
 const SyncPageSize = 1000
