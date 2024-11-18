@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -176,6 +177,7 @@ func PubEntitiesSince(ctx context.Context, key string, since time.Time, to time.
 		fn, ok := mSlice[key]
 		if !ok {
 			keys := lo.Keys(m)
+			sort.Strings(keys)
 			return fmt.Errorf("%s is not registered, avaible keys: \n%s", key, strings.Join(keys, "\t\n"))
 		}
 
