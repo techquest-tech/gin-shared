@@ -58,15 +58,16 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 		ss.Logger.Error("unexpected payload", zap.Error(err))
 		return err
 	}
+	l := ss.Logger.With(zap.String("key", kp.Key))
 	tt, ok := m[kp.Key]
 	if !ok {
-		ss.Logger.Error("received object failed. unknown key, just drop it.", zap.String("key", kp.Key))
+		l.Error("received object failed. unknown key, just drop it.", zap.String("key", kp.Key))
 		return errors.New("received object failed. unknown key " + kp.Key)
 	}
 	payload := reflect.New(tt).Interface()
 	err = json.Unmarshal(kp.Payload, payload)
 	if err != nil {
-		ss.Logger.Info("unexpected payload,", zap.Error(err))
+		l.Info("unexpected payload,", zap.Error(err))
 		return err
 	}
 	tx := ss.DB.Session(cfg)
@@ -79,28 +80,28 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 			return err
 		}
 		tx = tx.Table(tablename)
-		ss.Logger.Debug("sharding table for payload", zap.String("table", tablename))
+		l.Debug("sharding table for payload", zap.String("table", tablename))
 	}
 
 	switch kp.Action {
 	case GormActionSave, "":
 		err = tx.Save(payload).Error
 		if err != nil {
-			ss.Logger.Info("save object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
+			l.Info("save object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
 			return err
 		}
-		ss.Logger.Info("save object done.", zap.String("data", tt.Name()))
+		l.Info("save object done.", zap.String("data", tt.Name()))
 	case GormActionDelete:
 		if hasID && id == 0 {
-			ss.Logger.Warn("empty ID for delete action, just ignore it.")
+			l.Warn("empty ID for delete action, just ignore it.", zap.Any("payload", payload))
 			return nil
 		}
 		err = tx.Delete(payload).Error
 		if err != nil {
-			ss.Logger.Error("delete object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
+			l.Error("delete object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
 			return err
 		}
-		ss.Logger.Info("delete object done.", zap.String("data", tt.Name()), zap.Uint("id", id))
+		l.Info("delete object done.", zap.String("data", tt.Name()), zap.Uint("id", id))
 	default:
 		ss.Logger.Info("unknown action.", zap.String("action", string(kp.Action)))
 		return errors.ErrUnsupported
