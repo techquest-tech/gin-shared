@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/samber/lo"
@@ -77,7 +78,7 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 			return err
 		}
 		tx = tx.Table(tablename)
-		ss.Logger.Info("sharding table for payload", zap.String("table", tablename))
+		ss.Logger.Debug("sharding table for payload", zap.String("table", tablename))
 	}
 
 	switch kp.Action {
@@ -98,7 +99,7 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 			ss.Logger.Error("delete object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
 			return err
 		}
-		ss.Logger.Info("delete object done.", zap.String("data", tt.Name()))
+		ss.Logger.Info("delete object done.", zap.String("data", tt.Name()), zap.Uint("id", id))
 	default:
 		ss.Logger.Info("unknown action.", zap.String("action", string(kp.Action)))
 		return errors.ErrUnsupported
@@ -131,15 +132,32 @@ func toKeyAndPayload(raw []byte) (*GormPayload, error) {
 
 const SyncPageSize = 1000
 
-type QueryFn func(ctx context.Context, db *gorm.DB, logger *zap.Logger, since time.Time, index int) ([]any, error)
+type QueryFn func(ctx context.Context, db *gorm.DB, logger *zap.Logger, since time.Time, to time.Time, index int, queryDeleted bool) ([]any, error)
 
-func QueryEntities[T any](ctx context.Context, db *gorm.DB, logger *zap.Logger, since time.Time, index int) ([]any, error) {
+func QueryEntities[T any](ctx context.Context, db *gorm.DB, logger *zap.Logger, since time.Time, to time.Time, index int, queryDeleted bool) ([]any, error) {
 	tx := db.WithContext(ctx)
 
-	if !since.IsZero() {
-		tx = tx.Where("updated_at > ?", since)
+	if queryDeleted {
+		tx = tx.Unscoped()
+		tx = tx.Where("deleted_at is not null")
+		if !since.IsZero() {
+			tx = tx.Where("deleted_at > ?", since)
+		}
+		if !to.IsZero() {
+			tx = tx.Where("deleted_at <= ?", to)
+		}
+		tx = tx.Order("deleted_at")
+	} else {
+		if !since.IsZero() {
+			tx = tx.Where("updated_at > ?", since)
+		}
+		if !to.IsZero() {
+			tx = tx.Where("updated_at <= ?", to)
+		}
+		tx = tx.Order("updated_at")
 	}
-	tx = tx.Order("updated_at").Limit(SyncPageSize).Offset(index * SyncPageSize)
+
+	tx = tx.Debug().Limit(SyncPageSize).Offset(index * SyncPageSize)
 
 	rr := make([]T, 0)
 	if err := tx.Find(&rr).Error; err != nil {
@@ -149,7 +167,7 @@ func QueryEntities[T any](ctx context.Context, db *gorm.DB, logger *zap.Logger, 
 	return lo.ToAnySlice(rr), nil
 }
 
-func PubEntitiesSince(ctx context.Context, key string, since time.Time) error {
+func PubEntitiesSince(ctx context.Context, key string, since time.Time, to time.Time) error {
 	return core.GetContainer().Invoke(func(db *gorm.DB, logger *zap.Logger, msService MessagingService) error {
 		if ms == nil {
 			ms = msService
@@ -158,27 +176,47 @@ func PubEntitiesSince(ctx context.Context, key string, since time.Time) error {
 		fn, ok := mSlice[key]
 		if !ok {
 			keys := lo.Keys(m)
-			return fmt.Errorf("%s is not registered, avaible keys %v", key, keys)
+			return fmt.Errorf("%s is not registered, avaible keys: \n%s", key, strings.Join(keys, "\t\n"))
 		}
-		index := 0
-		processed := 0
 
-		for {
-			rr, err := fn(ctx, db, l, since, index)
-			if err != nil {
-				return err
-			}
-			l.Info("result len", zap.Int("len", len(rr)))
+		fnitem := func(deleted bool) error {
+			index := 0
+			processed := 0
 
-			for _, item := range rr {
-				PubGormSaved(ctx, item)
+			for {
+				rr, err := fn(ctx, db, l, since, to, index, deleted)
+				if err != nil {
+					return err
+				}
+				l.Info("result len", zap.Int("len", len(rr)))
+
+				action := GormActionSave
+				if deleted {
+					action = GormActionDelete
+				}
+
+				for _, item := range rr {
+					pubGormAction(ctx, item, action)
+				}
+
+				processed += len(rr)
+				index++
+				if len(rr) < SyncPageSize {
+					l.Info("no more data", zap.Int("processed", processed), zap.Bool("forDeleted", deleted))
+					break
+				}
 			}
-			processed += len(rr)
-			index++
-			if len(rr) < SyncPageSize {
-				l.Info("no more data", zap.Int("processed", processed))
-				return nil
-			}
+			return nil
 		}
+		l.Info("sync entities")
+		err := fnitem(false)
+		if err != nil {
+			return err
+		}
+
+		l.Info("sync deleted entities")
+		err = fnitem(true)
+
+		return err
 	})
 }

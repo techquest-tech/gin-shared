@@ -20,14 +20,14 @@ func init() {
 	})
 }
 
-func PubGormSaved(ctx context.Context, payload any) error {
-	return pubGormAction(ctx, payload, GormActionSave)
-}
+// func PubGormSaved(ctx context.Context, payload any) error {
+// 	return pubGormAction(ctx, payload, GormActionSave)
+// }
 
-func PubGormDeleted(ctx context.Context, payload any) error {
-	pubGormAction(ctx, payload, GormActionDelete)
-	return nil
-}
+// func PubGormDeleted(ctx context.Context, payload any) error {
+// 	pubGormAction(ctx, payload, GormActionDelete)
+// 	return nil
+// }
 
 // try to get payload ID value as uint, return false if payload doesn't have ID field
 func GetPayloadID(payload any) (uint, bool) {
