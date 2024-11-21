@@ -52,6 +52,15 @@ var cfg = &gorm.Session{
 	SkipDefaultTransaction: true,
 }
 
+type FailedPayload struct {
+	Key        string
+	Payload    any
+	ID         uint
+	FailedCode string
+}
+
+var DroppedPayload = core.NewChanAdaptor[*FailedPayload](1000)
+
 func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic, consumer string, raw []byte) error {
 	kp, err := toKeyAndPayload(raw)
 	if err != nil {
@@ -87,13 +96,14 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 	case GormActionSave, "":
 		err = tx.Save(payload).Error
 		if err != nil {
-			l.Info("save object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
+			l.Error("save object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
 			return err
 		}
-		l.Info("save object done.", zap.String("data", tt.Name()))
+		l.Info("save object done.", zap.String("data", tt.Name()), zap.Uint("id", id))
 	case GormActionDelete:
 		if hasID && id == 0 {
 			l.Warn("empty ID for delete action, just ignore it.", zap.Any("payload", payload))
+			DroppedPayload.Push(&FailedPayload{Payload: payload, Key: kp.Key, FailedCode: "empty_id"})
 			return nil
 		}
 		err = tx.Delete(payload).Error
