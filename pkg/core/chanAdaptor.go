@@ -13,9 +13,10 @@ type ChanAdaptor[T any] struct {
 	sender    chan T
 	receivers map[string]chan T
 	locker    sync.Mutex
+	Started   bool
 }
 
-type Handler[T any] func(data T)
+type Handler[T any] func(data T) error
 
 func NewChanAdaptor[T any](buf int) *ChanAdaptor[T] {
 	if buf == 0 {
@@ -32,32 +33,52 @@ func (ca *ChanAdaptor[T]) Push(data T) {
 	ca.sender <- data
 }
 
-func (ca *ChanAdaptor[T]) Subscripter(receiver string, fn Handler[T]) chan T {
-	ca.locker.Lock()
-	defer ca.locker.Unlock()
+func (ca *ChanAdaptor[T]) Sub(receiver string) chan T {
 	if receiver == "" {
 		receiver = randstr.Hex(16)
 	}
-	if t, ok := ca.receivers[receiver]; ok {
-		return t
+	l := zap.L().With(zap.String("receiver", receiver))
+	if ca.Started {
+		l.Warn("adaptor is started, can't add new receiver")
+		return nil
+	}
+	ca.locker.Lock()
+	defer ca.locker.Unlock()
+	if _, ok := ca.receivers[receiver]; ok {
+		// return t
+		l.Warn("receiver already exists")
+		return nil
 	}
 	c := make(chan T)
 	ca.receivers[receiver] = c
-	zap.L().Info("receiver suscribed", zap.String("receiver", receiver))
-
-	if fn != nil {
-		go func() {
-			for v := range c {
-				fn(v)
-			}
-		}()
-	}
-
+	l.Info("receiver suscribed")
 	return c
 }
 
+func (ca *ChanAdaptor[T]) Subscripter(receiver string, fn Handler[T]) {
+	l := zap.L().With(zap.String("receiver", receiver))
+	if fn == nil {
+		l.Warn("handler is nil")
+		return
+	}
+	c := ca.Sub(receiver)
+	if c == nil {
+		return
+	}
+	go func() {
+		for v := range c {
+			err := fn(v)
+			if err != nil {
+				l.Error("handler error", zap.Error(err))
+			}
+		}
+	}()
+}
+
+// make sure all receivers reg before start()
 func (ca *ChanAdaptor[T]) Start() {
 	zap.L().Info("chanAdaptor started")
+	ca.Started = true
 	for v := range ca.sender {
 		for _, c := range ca.receivers {
 			c <- v
@@ -70,4 +91,4 @@ func (ca *ChanAdaptor[T]) Start() {
 	zap.L().Info("chanAdaptor and receivers were stopped.")
 }
 
-var ErrorAdaptor = NewChanAdaptor[error](1000)
+var ErrorAdaptor = NewChanAdaptor[error](1000) // error adaptor for monitor error.

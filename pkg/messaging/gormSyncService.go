@@ -3,13 +3,13 @@ package messaging
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/samber/lo"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
@@ -20,16 +20,13 @@ var DefaultGormToipc = "scm.gorm.saved"
 
 var GormMessagingEnabled = true
 
-var ms MessagingService
-
-func init() {
-	core.ProvideStartup(func(m MessagingService) core.Startup {
-		ms = m
-		return nil
-	})
-}
+var chAbandoned chan any
 
 func NewGormObjSyncService(ms MessagingService, logger *zap.Logger, db *gorm.DB) *GormObjSyncService {
+	chAbandoned = make(chan any)
+	rdstr := xid.New().String()
+	go core.AppendToFile(chAbandoned, fmt.Sprintf("receivedAbandoned_%s.log", rdstr))
+
 	return &GormObjSyncService{
 		MessageService: ms,
 		DB:             db,
@@ -52,14 +49,14 @@ var cfg = &gorm.Session{
 	SkipDefaultTransaction: true,
 }
 
-type FailedPayload struct {
-	Key        string
-	Payload    any
-	ID         uint
-	FailedCode string
+func (ss *GormObjSyncService) toAbandoned(kp *GormPayload, errCode string) {
+	chAbandoned <- map[string]any{
+		"error":  errCode,
+		"key":    kp.Key,
+		"action": kp.Action,
+		"data":   kp.Payload,
+	}
 }
-
-var DroppedPayload = core.NewChanAdaptor[*FailedPayload](1000)
 
 func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic, consumer string, raw []byte) error {
 	kp, err := toKeyAndPayload(raw)
@@ -71,12 +68,14 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 	tt, ok := m[kp.Key]
 	if !ok {
 		l.Error("received object failed. unknown key, just drop it.", zap.String("key", kp.Key))
-		return errors.New("received object failed. unknown key " + kp.Key)
+		ss.toAbandoned(kp, "UnknownKey")
+		return nil
 	}
 	payload := reflect.New(tt).Interface()
 	err = json.Unmarshal(kp.Payload, payload)
 	if err != nil {
 		l.Info("unexpected payload,", zap.Error(err))
+		ss.toAbandoned(kp, err.Error())
 		return err
 	}
 	tx := ss.DB.Session(cfg)
@@ -86,6 +85,7 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 	if ss.Sharding != nil {
 		tablename, err := ss.Sharding(tx, kp.Key, payload)
 		if err != nil {
+			ss.toAbandoned(kp, "ShardingFailed:"+err.Error())
 			return err
 		}
 		tx = tx.Table(tablename)
@@ -97,24 +97,28 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 		err = tx.Save(payload).Error
 		if err != nil {
 			l.Error("save object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
+			ss.toAbandoned(kp, "SaveFailed:"+err.Error())
 			return err
 		}
 		l.Info("save object done.", zap.String("data", tt.Name()), zap.Uint("id", id))
 	case GormActionDelete:
 		if hasID && id == 0 {
 			l.Warn("empty ID for delete action, just ignore it.", zap.Any("payload", payload))
-			DroppedPayload.Push(&FailedPayload{Payload: payload, Key: kp.Key, FailedCode: "empty_id"})
+			// DroppedPayload.Push(&FailedPayload{Payload: payload, Key: kp.Key, FailedCode: "empty_id"})
+			ss.toAbandoned(kp, "DeletedOnEmptyID")
 			return nil
 		}
 		err = tx.Delete(payload).Error
 		if err != nil {
 			l.Error("delete object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
+			ss.toAbandoned(kp, "DeleteFailed:"+err.Error())
 			return err
 		}
 		l.Info("delete object done.", zap.String("data", tt.Name()), zap.Uint("id", id))
 	default:
 		ss.Logger.Info("unknown action.", zap.String("action", string(kp.Action)))
-		return errors.ErrUnsupported
+		// return errors.ErrUnsupported
+		ss.toAbandoned(kp, "UnknownAction")
 	}
 
 	return nil

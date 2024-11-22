@@ -11,23 +11,26 @@ import (
 	"gorm.io/gorm"
 )
 
+var (
+	chSender chan any
+	ms       MessagingService
+)
+
 func init() {
-	core.ProvideStartup(func(ms MessagingService, db *gorm.DB) core.Startup {
+	core.ProvideStartup(func(service MessagingService, db *gorm.DB) core.Startup {
+		ms = service
 		db.Callback().Create().After("gorm:after_create").Register("messaging", messageCallbackForUpdate)
 		db.Callback().Update().After("gorm:after_update").Register("messaging", messageCallbackForUpdate)
 		db.Callback().Delete().After("gorm:delete").Register("messaging", messageCallbackForDelete)
+
+		if GormMessagingEnabled {
+			chSender = make(chan any, 1000)
+			go core.AppendToFile(chSender, "gormSenderAbandoned.log")
+		}
+
 		return nil
 	})
 }
-
-// func PubGormSaved(ctx context.Context, payload any) error {
-// 	return pubGormAction(ctx, payload, GormActionSave)
-// }
-
-// func PubGormDeleted(ctx context.Context, payload any) error {
-// 	pubGormAction(ctx, payload, GormActionDelete)
-// 	return nil
-// }
 
 // try to get payload ID value as uint, return false if payload doesn't have ID field
 func GetPayloadID(payload any) (uint, bool) {
@@ -57,7 +60,7 @@ func pubGormAction(ctx context.Context, payload any, action GormAction) error {
 	key = strings.TrimLeft(key, "*")
 
 	if _, ok := m[key]; !ok {
-		zap.L().Debug("not registered key, ignored.", zap.String("key", key))
+		zap.L().Info("not registered key, ignored.", zap.String("key", key))
 		return nil
 	}
 
@@ -66,12 +69,17 @@ func pubGormAction(ctx context.Context, payload any, action GormAction) error {
 	id, hasID := GetPayloadID(payload)
 	if hasID && id == 0 {
 		logger.Warn("empty ID, just skip")
+		chSender <- map[string]any{"key": key,
+			"action":    string(action),
+			"payload":   payload,
+			"errorCode": "EmptyID"}
 		return nil
 	}
 
 	logger.Debug("running callback.", zap.Any("payload", payload))
 	raw, err := json.Marshal(payload)
 	if err != nil {
+		logger.Error("marshal payload failed.", zap.Error(err))
 		return err
 	}
 	ms.Pub(ctx, DefaultGormToipc, GormPayload{Key: key, Payload: raw, Action: action})
