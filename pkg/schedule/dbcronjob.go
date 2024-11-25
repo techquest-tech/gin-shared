@@ -12,22 +12,21 @@ type DBCronJob struct {
 	Name     string
 	Schedule string
 	Sql      []string
-	logger   *zap.Logger
-	db       *gorm.DB
-	// cr       *cron.Cron
+	Logger   *zap.Logger
+	DB       *gorm.DB
 }
 
 func (job *DBCronJob) FireJob() {
 	// job.logger.Info("run db scheduled job")
 	for _, item := range job.Sql {
-		result := job.db.Exec(item)
+		result := job.DB.Exec(item)
 		if result.Error != nil {
-			job.logger.Error("run sql failed", zap.String("sql", item), zap.Error(result.Error))
+			job.Logger.Error("run sql failed", zap.String("sql", item), zap.Error(result.Error))
 			return
 		}
-		job.logger.Info("run sql job done", zap.String("sql", item), zap.Int64("rows", result.RowsAffected))
+		job.Logger.Info("run sql job done", zap.String("sql", item), zap.Int64("rows", result.RowsAffected))
 	}
-	job.logger.Info("all sql done")
+	job.Logger.Info("all sql done")
 }
 
 func InitDBCronJob(logger *zap.Logger, db *gorm.DB) (core.Startup, error) {
@@ -39,8 +38,8 @@ func InitDBCronJob(logger *zap.Logger, db *gorm.DB) (core.Startup, error) {
 
 	for key := range sub.AllSettings() {
 		item := &DBCronJob{
-			logger:   logger.With(zap.String("job", key)),
-			db:       db,
+			Logger:   logger.With(zap.String("job", key)),
+			DB:       db,
 			Name:     key,
 			Schedule: sub.GetString(key + ".schedule"),
 			Sql:      sub.GetStringSlice(key + ".sql"),
@@ -53,7 +52,7 @@ func InitDBCronJob(logger *zap.Logger, db *gorm.DB) (core.Startup, error) {
 		if item.Schedule != "-" && len(item.Sql) > 0 {
 			err := CreateSchedule(item.Name, item.Schedule, item.FireJob)
 			if err != nil {
-				item.logger.Error("start up schedule failed.", zap.Error(err))
+				item.Logger.Error("start up schedule failed.", zap.Error(err))
 				return nil, err
 			}
 		}
