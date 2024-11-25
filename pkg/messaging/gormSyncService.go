@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rs/xid"
 	"github.com/samber/lo"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
@@ -24,8 +23,8 @@ var chAbandoned chan any
 
 func NewGormObjSyncService(ms MessagingService, logger *zap.Logger, db *gorm.DB) *GormObjSyncService {
 	chAbandoned = make(chan any)
-	rdstr := xid.New().String()
-	go core.AppendToFile(chAbandoned, fmt.Sprintf("receivedAbandoned_%s.log", rdstr))
+	// rdstr := xid.New().String()
+	go core.AppendToFile(chAbandoned, "receivedAbandoned.log")
 
 	return &GormObjSyncService{
 		MessageService: ms,
