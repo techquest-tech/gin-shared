@@ -14,11 +14,12 @@ import (
 )
 
 type DBCleanupReq struct {
-	Cnn          string   //connection name
-	Tables       []string //tables to be clean
-	DeletedField string   //field name, default is deletedAt
-	Duration     string   // only delete DeletedAt <  now - duration
-	Batch        int      // batch per deleted
+	Cnn            string   //connection name
+	Tables         []string //tables to be clean
+	PrefixIncluded bool     // table names included table prefix
+	DeletedField   string   //field name, default is deletedAt
+	Duration       string   // only delete DeletedAt <  now - duration
+	Batch          int      // batch per deleted
 }
 
 type CleanupService struct {
@@ -63,7 +64,9 @@ func (cs *CleanupService) Cleanup(req *DBCleanupReq) error {
 	cs.logger.Info("duration value ", zap.Duration("duration", duration), zap.Time("before", starttime))
 	tablePrefix := viper.GetString("database.tablePrefix")
 	for _, t := range req.Tables {
-		t = tablePrefix + t
+		if !req.PrefixIncluded {
+			t = tablePrefix + t
+		}
 		total := int64(0)
 		sql := fmt.Sprintf("delete from %s where %s <= ? limit ?", t, req.DeletedField)
 		done := false

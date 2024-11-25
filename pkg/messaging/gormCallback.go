@@ -68,6 +68,7 @@ func pubGormAction(ctx context.Context, payload any, action GormAction) error {
 
 	id, hasID := GetPayloadID(payload)
 	if hasID && id == 0 {
+
 		logger.Warn("empty ID, just skip")
 		chSender <- map[string]any{"key": key,
 			"action":    string(action),
@@ -91,6 +92,10 @@ func messageCallbackForUpdate(db *gorm.DB) {
 	if db.Error != nil || db.Statement.SkipHooks {
 		return
 	}
+	if db.Statement.RowsAffected == 0 {
+		zap.L().Debug("no rows affected, ignored.")
+		return
+	}
 	payload := db.Statement.ReflectValue.Interface()
 	pubGormAction(db.Statement.Context, payload, GormActionSave)
 }
@@ -99,6 +104,12 @@ func messageCallbackForDelete(db *gorm.DB) {
 	if db.Error != nil || db.Statement.SkipHooks {
 		return
 	}
+
+	if db.Statement.RowsAffected == 0 {
+		zap.L().Debug("no rows affected, ignored.")
+		return
+	}
+
 	payload := db.Statement.ReflectValue.Interface()
 	pubGormAction(db.Statement.Context, payload, GormActionDelete)
 }

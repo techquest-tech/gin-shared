@@ -3,6 +3,7 @@ package schedule
 import (
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
+	"github.com/techquest-tech/gin-shared/pkg/orm"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -44,6 +45,11 @@ func InitDBCronJob(logger *zap.Logger, db *gorm.DB) (core.Startup, error) {
 			Schedule: sub.GetString(key + ".schedule"),
 			Sql:      sub.GetStringSlice(key + ".sql"),
 		}
+		replacedSql := make([]string, len(item.Sql))
+		for index, sql := range item.Sql {
+			replacedSql[index] = orm.ReplaceTablePrefix(sql)
+		}
+		item.Sql = replacedSql
 		if item.Schedule != "-" && len(item.Sql) > 0 {
 			err := CreateSchedule(item.Name, item.Schedule, item.FireJob)
 			if err != nil {
