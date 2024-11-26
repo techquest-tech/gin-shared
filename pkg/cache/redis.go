@@ -23,25 +23,36 @@ import (
 var DefaultLocalCacheItems = 0 //local cache items. it's important for performance & if redis failed.
 
 type RedisConfig struct {
-	Host    string
-	Port    uint
-	Account string
-	Passwd  string
-	Caroot  string // where is the ca pem file.
-	Tls     bool   //TLS enabled ?
-	DB      int    // 0: dev, 1: uat, 3: prd
+	Host       string
+	Port       uint
+	Account    string
+	Passwd     string
+	Caroot     string // where is the ca pem file.
+	Tls        bool   //TLS enabled ?
+	DB         int    // 0: dev, 1: uat, 3: prd
+	PoolSize   int
+	MinIdle    int
+	ClientName string
 }
 
-func NewRedisClient(logger *zap.Logger) *redis.Client {
-	opts := &redis.Options{}
+func newRedisOptions(logger *zap.Logger) *redis.Options {
 	subRedis := viper.Sub("redis")
 	cfg := &RedisConfig{
-		Port: 6379,
+		Port:       6379,
+		PoolSize:   10,
+		MinIdle:    2,
+		ClientName: fmt.Sprintf("%s-%s", core.AppName, core.Version),
 	}
 	if subRedis != nil {
 		subRedis.Unmarshal(cfg)
 		DefaultLocalCacheItems = subRedis.GetInt("localItem")
 		logger.Info("load item value done", zap.Int("localItem", DefaultLocalCacheItems))
+	}
+
+	opts := &redis.Options{
+		PoolSize:     cfg.PoolSize,
+		MinIdleConns: cfg.MinIdle,
+		ClientName:   cfg.ClientName,
 	}
 	if cfg.Host != "" {
 		opts.Addr = fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
@@ -74,8 +85,16 @@ func NewRedisClient(logger *zap.Logger) *redis.Client {
 		}
 		opts.TLSConfig = tconfig
 	}
+	return opts
+}
 
+func NewRedisClient(opts *redis.Options, logger *zap.Logger) *redis.Client {
 	client := redis.NewClient(opts)
+	err := client.Ping(context.Background()).Err()
+	if err != nil {
+		logger.Error("failed to connect to redis.", zap.String("redis", opts.Addr), zap.Error(err))
+		panic(err)
+	}
 	logger.Info("connected to redis", zap.String("redis", opts.Addr))
 
 	return client
@@ -263,5 +282,6 @@ func (r *RedisProvider[T]) Del(key string) error {
 }
 
 func init() {
+	core.Provide(newRedisOptions)
 	core.Provide(NewRedisClient)
 }

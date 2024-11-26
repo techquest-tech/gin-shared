@@ -23,9 +23,17 @@ import (
 const (
 	DefaultMsgLimit          = math.MaxInt16
 	DefaultAttKey            = "payload"
-	DefaultSchedule          = "@every 30m"
+	DefaultSchedule          = "@every 5m"
 	DefaultDeadLetterDurtion = 8 * time.Hour //if messaging pending for more than this duration, will be put to dead letter
 )
+
+type MessagnePending struct {
+	Topic    string
+	Group    string
+	Schedule string
+	MaxBatch int
+	Limit    int
+}
 
 type DefaultMessgingService struct {
 	Logger          *zap.Logger
