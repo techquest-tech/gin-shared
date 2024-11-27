@@ -54,8 +54,10 @@ func CheckIfEnabled() cron.JobWrapper {
 var jobs = make(map[string]func())
 
 func Run(jobname string) (err error) {
+	ScheduleDisabled = true
 	fn, ok := jobs[jobname]
 	defer func() {
+		ScheduleDisabled = false
 		if err := recover(); err != nil {
 			zap.L().Error("run job failed", zap.String("job", jobname), zap.Any("err", err))
 		}

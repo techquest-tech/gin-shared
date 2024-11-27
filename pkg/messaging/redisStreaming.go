@@ -14,11 +14,18 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/samber/lo"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/schedule"
 	"go.uber.org/zap"
 )
+
+var AbandonedChan chan any
+
+var ConsumerName string
+
+var ResetTopics []string
 
 const (
 	DefaultMsgLimit          = math.MaxInt16
@@ -74,14 +81,19 @@ func (msg *DefaultMessgingService) handleMessage(ctx context.Context, topic, gro
 	processor Processor, v redis.XMessage) error {
 	id := v.ID
 	value := v.Values
-	logger.Debug("recieved message", zap.String("ID", id), zap.Any("value", value))
-	raw := value[DefaultAttKey]
-	vv := raw.(string)
-	err := processor(ctx, topic, group, []byte(vv))
-	if err != nil {
-		logger.Error("processor return error", zap.Error(err))
-		return err
+	if value == nil {
+		logger.Warn("message value is empty", zap.String("messageID", id))
+	} else {
+		logger.Debug("recieved message", zap.String("ID", id), zap.Any("value", value))
+		raw := value[DefaultAttKey]
+		vv := raw.(string)
+		err := processor(ctx, topic, group, []byte(vv))
+		if err != nil {
+			logger.Error("processor return error", zap.Error(err))
+			return err
+		}
 	}
+
 	resp := msg.Client.XAck(ctx, topic, group, id)
 	if resp.Err() != nil {
 		logger.Error("ack message failed.", zap.Error(resp.Err()))
@@ -92,53 +104,85 @@ func (msg *DefaultMessgingService) handleMessage(ctx context.Context, topic, gro
 
 func (msg *DefaultMessgingService) ProcessPendings(ctx context.Context, topic, group string, processor Processor) {
 	logger := msg.Logger.With(zap.String("topic", topic))
-	// read pendings
+
 	cmdPending, err := msg.Client.XPending(ctx, topic, group).Result()
 	if err != nil {
 		logger.Error("read pending message failed.", zap.Error(err))
 		return
 	}
 	if cmdPending.Count > 0 {
-		xrangeResult, err := msg.Client.XRange(ctx, topic, cmdPending.Lower, cmdPending.Higher).Result()
-		if err != nil {
-			logger.Error("read pending message by xrange failed.", zap.String("topic", topic),
-				zap.String("start", cmdPending.Lower), zap.String("end", cmdPending.Higher), zap.Error(err))
-			return
-		}
-		logger.Info("read pending message by xrange done.", zap.Int("count", len(xrangeResult)))
-		for _, item := range xrangeResult {
-			err = msg.handleMessage(ctx, topic, group, logger, processor, item)
+		for c, p := range cmdPending.Consumers {
+			xrangeResult, err := msg.Client.XPendingExt(ctx, &redis.XPendingExtArgs{
+				Stream:   topic,
+				Group:    group,
+				Count:    p,
+				Start:    cmdPending.Lower,
+				End:      cmdPending.Higher,
+				Consumer: c,
+			}).Result()
 			if err != nil {
-				logger.Error("process pending message failed. ", zap.Error(err))
-				strT := item.ID
-				index := strings.IndexRune(item.ID, '-')
-				if index > 0 {
-					strT = item.ID[:index]
-				}
-
-				unixTimeint, err := strconv.ParseInt(strT, 10, 64)
+				logger.Warn("read pending message by XPendingExt failed. will try next round.", zap.String("topic", topic), zap.Error(err))
+				continue
+			}
+			logger.Info("read pending message done.", zap.Int("count", len(xrangeResult)))
+			for _, pendingItem := range xrangeResult {
+				readResult, err := msg.Client.XReadGroup(ctx, &redis.XReadGroupArgs{
+					Group:    group,
+					Consumer: pendingItem.Consumer,
+					Streams:  []string{topic, pendingItem.ID},
+					Count:    1,
+					Block:    0,
+				}).Result()
 				if err != nil {
-					logger.Warn("convert pending message id failed.", zap.Error(err))
+					logger.Error("read pending message failed.", zap.Error(err))
+					return
 				}
-				pendinged := time.Since(time.Unix(unixTimeint/1000, 0))
-				logger.Info("checking pending duration", zap.Duration("pendinged", pendinged))
-				if pendinged >= DefaultDeadLetterDurtion || err != nil {
-					logger.Warn("pending message expired, put it to dead letter", zap.String("duration", pendinged.String()))
-					resp := msg.Client.XAdd(ctx, &redis.XAddArgs{
-						Stream: fmt.Sprintf("%s.%s.deadletter", topic, group),
-						Values: item.Values,
-					})
-					if resp.Err() != nil {
-						logger.Error("send to dead letter failed.", zap.Error(resp.Err()))
-					}
+				if len(readResult) == 0 {
+					continue
+				}
+				for _, item := range readResult[0].Messages {
+					err = msg.handleMessage(ctx, topic, group, logger, processor, item)
+					if err != nil {
+						logger.Error("process pending message failed. ", zap.Error(err))
+						strT := item.ID
+						index := strings.IndexRune(item.ID, '-')
+						if index > 0 {
+							strT = item.ID[:index]
+						}
 
-					ackResp := msg.Client.XAck(ctx, topic, group, item.ID)
-					if ackResp.Err() != nil {
-						logger.Error("ack pending message failed.", zap.Error(ackResp.Err()))
+						unixTimeint, err := strconv.ParseInt(strT, 10, 64)
+						if err != nil {
+							logger.Warn("convert pending message id failed.", zap.Error(err))
+						}
+						pendinged := time.Since(time.Unix(unixTimeint/1000, 0))
+						logger.Info("checking pending duration", zap.Duration("pendinged", pendinged))
+						if pendinged >= DefaultDeadLetterDurtion || err != nil {
+							logger.Warn("pending message expired, abandoned.", zap.String("duration", pendinged.String()))
+							// resp := msg.Client.XAdd(ctx, &redis.XAddArgs{
+							// 	Stream: fmt.Sprintf("%s.%s.deadletter", topic, group),
+							// 	Values: item.Values,
+							// })
+							// if resp.Err() != nil {
+							// 	logger.Error("send to dead letter failed.", zap.Error(resp.Err()))
+							// }
+							payload := item.Values
+							payload["ID"] = item.ID
+							payload["consumer"] = c
+							payload["topic"] = topic
+							payload["duration"] = pendinged.String()
+
+							AbandonedChan <- payload
+
+							ackResp := msg.Client.XAck(ctx, topic, group, item.ID)
+							if ackResp.Err() != nil {
+								logger.Error("ack pending message failed.", zap.Error(ackResp.Err()))
+							}
+						}
 					}
 				}
 			}
 		}
+
 		logger.Info("process pending message done")
 	} else {
 		logger.Info("no pending messages")
@@ -156,21 +200,30 @@ func (msg *DefaultMessgingService) Sub(ctx context.Context, topic, group string,
 		logger.Warn("group might be created.", zap.Error(err), zap.String("group", group))
 	}
 
+	if lo.Contains(ResetTopics, topic) {
+		msg.Client.XGroupSetID(ctx, topic, group, "0")
+		logger.Info("reset topic", zap.String("topic", topic))
+	}
+
 	go func() {
-		hostname, err := os.Hostname()
-		if err != nil {
-			logger.Error("failed to get hostname, just make it empty", zap.Error(err))
+		if ConsumerName == "" {
+			hostname, err := os.Hostname()
+			if err != nil {
+				logger.Error("failed to get hostname, just make it empty", zap.Error(err))
+			}
+
+			ConsumerName = hostname //+ "-" + time.Now().Format("20060102150405")
 		}
 
-		consumer := hostname //+ "-" + time.Now().Format("20060102150405")
 		logger.Info("start consumer", zap.String("group", group),
-			zap.String("topic", topic), zap.String("consumer", consumer))
+			zap.String("topic", topic), zap.String("consumer", ConsumerName))
 
 		for {
 			cmd := msg.Client.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    group,
-				Consumer: consumer,
+				Consumer: ConsumerName,
 				Streams:  []string{topic, ">"},
+				Count:    0,
 			})
 
 			vv, err := cmd.Result()
@@ -197,6 +250,9 @@ func (msg *DefaultMessgingService) Sub(ctx context.Context, topic, group string,
 }
 
 func init() {
+	AbandonedChan = make(chan any)
+	go core.AppendToFile(AbandonedChan, "receivedAbandoned.log")
+
 	core.Provide(func(client *redis.Client, logger *zap.Logger) (MessagingService, *DefaultMessgingService) {
 		d := &DefaultMessgingService{
 			Client: client,
@@ -214,7 +270,6 @@ func init() {
 				d.Settings[k] = value
 			}
 		}
-
 		return d, d
 	})
 }

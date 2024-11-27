@@ -37,11 +37,12 @@ type RedisConfig struct {
 
 func newRedisOptions(logger *zap.Logger) *redis.Options {
 	subRedis := viper.Sub("redis")
+	clientname := strings.ReplaceAll(fmt.Sprintf("%s-%s", core.AppName, core.Version), " ", "_")
 	cfg := &RedisConfig{
 		Port:       6379,
 		PoolSize:   10,
 		MinIdle:    2,
-		ClientName: fmt.Sprintf("%s-%s", core.AppName, core.Version),
+		ClientName: clientname,
 	}
 	if subRedis != nil {
 		subRedis.Unmarshal(cfg)
