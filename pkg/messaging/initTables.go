@@ -38,6 +38,7 @@ func GetRegisted() []any {
 	return registedEntity
 }
 
+// should never pass any into this function
 func Reg[T any](payload T) {
 	tt := reflect.TypeOf(payload)
 	// if key == "" {
