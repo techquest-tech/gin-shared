@@ -47,11 +47,11 @@ var embedcache map[string]*viper.Viper = make(map[string]*viper.Viper)
 // 	return true
 // }
 
-var embedConfigLocker = sync.Mutex{}
+var configLocker = sync.Mutex{}
 
 func ToEmbedConfig(content []byte, keys ...string) {
-	embedConfigLocker.Lock()
-	defer embedConfigLocker.Unlock()
+	configLocker.Lock()
+	defer configLocker.Unlock()
 
 	configItem := viper.New()
 	configItem.SetConfigType("yaml")
@@ -110,6 +110,9 @@ func InitEmbedConfig() {
 // }
 
 func loadConfig(configname string) error {
+	configLocker.Lock()
+	defer configLocker.Unlock()
+
 	profileConfig := viper.New()
 	profileConfig.SetConfigName(configname)
 	profileConfig.SetConfigType("yaml")

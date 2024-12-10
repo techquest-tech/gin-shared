@@ -20,14 +20,15 @@ func AppendEntity(entity ...interface{}) {
 var ormOnce sync.Once
 
 func ApplyMigrate() error {
-	return core.Container.Invoke(core.Container.Invoke(func(db *gorm.DB, logger *zap.Logger, bus core.OptionalParam[EventBus.Bus]) {
+	fn := func(db *gorm.DB, logger *zap.Logger, bus core.OptionalParam[EventBus.Bus]) {
 		ormOnce.Do(func() {
 			if viper.GetBool(KeyInitDB) {
 				MigrateTableAndView(db, logger, bus.P)
 			}
 		})
-
-	}))
+	}
+	core.InvokeAsyncOnServiceStarted(fn)
+	return nil
 }
 
 func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus) {
