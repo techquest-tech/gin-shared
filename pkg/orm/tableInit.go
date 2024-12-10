@@ -19,16 +19,16 @@ func AppendEntity(entity ...interface{}) {
 
 var ormOnce sync.Once
 
+var migrateFN = func(db *gorm.DB, logger *zap.Logger, bus core.OptionalParam[EventBus.Bus]) {
+	ormOnce.Do(func() {
+		if viper.GetBool(KeyInitDB) {
+			MigrateTableAndView(db, logger, bus.P)
+		}
+	})
+}
+
 func ApplyMigrate() error {
-	fn := func(db *gorm.DB, logger *zap.Logger, bus core.OptionalParam[EventBus.Bus]) {
-		ormOnce.Do(func() {
-			if viper.GetBool(KeyInitDB) {
-				MigrateTableAndView(db, logger, bus.P)
-			}
-		})
-	}
-	core.InvokeAsyncOnServiceStarted(fn)
-	return nil
+	return core.GetContainer().Invoke(migrateFN)
 }
 
 func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus) {
@@ -56,6 +56,6 @@ func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus) {
 	}
 }
 
-// func init() {
-// 	AppendEntity(&schedule.JobSchedule{})
-// }
+func init() {
+	core.InvokeAsyncOnServiceStarted(migrateFN)
+}
