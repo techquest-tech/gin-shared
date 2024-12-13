@@ -1,7 +1,6 @@
 package core
 
 import (
-	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -90,7 +89,6 @@ func CloseOnlyNotified() {
 		signal.Notify(sigCh, syscall.SIGTERM)
 
 		<-sigCh
-		context.TODO().Done()
 
 		fmt.Printf("app existing...")
 

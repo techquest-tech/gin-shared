@@ -17,7 +17,7 @@ type GeneralResp struct {
 
 type ReportError struct {
 	ReplyCode int
-	logger    *zap.Logger
+	// logger    *zap.Logger
 }
 
 type ErrorCode interface {
@@ -25,7 +25,7 @@ type ErrorCode interface {
 }
 
 func (handle *ReportError) RespErrorToClient(c *gin.Context, err interface{}) {
-	handle.logger.Error("error found", zap.Any("error", err))
+	zap.L().Error("error found", zap.Any("error", err))
 	errorResp := GeneralResp{
 		Succ:         false,
 		ErrorMessage: fmt.Sprintf("%+v", err),
@@ -60,11 +60,24 @@ func (handle *ReportError) Middleware(c *gin.Context) {
 
 	c.Next()
 }
+func (h *ReportError) Priority() int { return 10 }
 
+func (h *ReportError) OnEngineInited(r *gin.Engine) error {
+	zap.L().Info("register error handler")
+	r.Use(h.Middleware)
+	return nil
+}
+
+func init() {
+	RegisterComponent(&ReportError{ReplyCode: 500})
+}
+
+// deprecated
 func NewErrorReport(replyCode int, logger *zap.Logger) gin.HandlerFunc {
-	r := ReportError{
-		ReplyCode: replyCode,
-		logger:    logger,
-	}
-	return r.Middleware
+	// r := ReportError{
+	// 	ReplyCode: replyCode,
+	// 	logger:    logger,
+	// }
+	// return r.Middleware
+	return func(ctx *gin.Context) { ctx.Next() }
 }
