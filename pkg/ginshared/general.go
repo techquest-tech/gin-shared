@@ -2,7 +2,7 @@ package ginshared
 
 import (
 	"fmt"
-	"runtime/debug"
+	"runtime"
 
 	"github.com/gin-gonic/gin"
 	"github.com/techquest-tech/gin-shared/pkg/core"
@@ -41,10 +41,10 @@ func (handle *ReportError) Middleware(c *gin.Context) {
 	defer func() {
 		if err := recover(); err != nil {
 			// print panic stack
-			// buffer := make([]byte, 10240)
-			// n := runtime.Stack(buffer, false)
-			// fmt.Printf("recover from panic: \n %s", string(buffer[:n]))
-			fmt.Printf("recover from panic: \n %s", debug.Stack())
+			buffer := make([]byte, 10240)
+			n := runtime.Stack(buffer, false)
+			fmt.Printf("gin recover from panic: \n %s", string(buffer[:n]))
+			// fmt.Printf("recover from panic: \n %s", debug.Stack())
 			var e error
 			e, ok := err.(error)
 			if !ok {
