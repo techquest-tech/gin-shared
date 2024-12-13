@@ -107,6 +107,21 @@ func Start() error {
 			Handler: p.Router,
 		}
 
+		core.OnServiceStopping(func() {
+			ctx, cancel := context.WithTimeout(context.TODO(), shutdownDur)
+
+			defer cancel()
+			if err := svc.Shutdown(ctx); err != nil {
+				logger.Fatal("Server Shutdown failed", zap.Error(err))
+			}
+			// catching ctx.Done(). timeout of 5 seconds.
+			// select {
+			<-ctx.Done()
+			logger.Info("shutdown timeout", zap.Duration("dur", shutdownDur))
+			// }
+			logger.Info("stopped.")
+		})
+
 		go func() {
 			logger.Info("gin service starting ", zap.String("addr", address))
 			if p.Tls.Enabled {
@@ -123,18 +138,6 @@ func Start() error {
 
 		core.CloseOnlyNotified()
 
-		ctx, cancel := context.WithTimeout(context.TODO(), shutdownDur)
-
-		defer cancel()
-		if err := svc.Shutdown(ctx); err != nil {
-			logger.Fatal("Server Shutdown failed", zap.Error(err))
-		}
-		// catching ctx.Done(). timeout of 5 seconds.
-		// select {
-		<-ctx.Done()
-		logger.Info("shutdown timeout", zap.Duration("dur", shutdownDur))
-		// }
-		logger.Info("stopped.")
 		return nil
 	})
 }

@@ -79,6 +79,9 @@ func (ca *ChanAdaptor[T]) Subscripter(receiver string, fn Handler[T]) {
 func (ca *ChanAdaptor[T]) Start() {
 	zap.L().Info("chanAdaptor started")
 	ca.Started = true
+	OnServiceStopping(func() {
+		close(ca.sender)
+	})
 	for v := range ca.sender {
 		for _, c := range ca.receivers {
 			c <- v
