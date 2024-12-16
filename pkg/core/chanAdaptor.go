@@ -22,11 +22,13 @@ func NewChanAdaptor[T any](buf int) *ChanAdaptor[T] {
 	if buf == 0 {
 		buf = 1
 	}
-	return &ChanAdaptor[T]{
+	rr := &ChanAdaptor[T]{
 		sender:    make(chan T, buf),
 		receivers: make(map[string]chan T),
 		locker:    sync.Mutex{},
 	}
+	OnServiceStarted(rr.Start)
+	return rr
 }
 
 func (ca *ChanAdaptor[T]) Push(data T) {
@@ -77,6 +79,10 @@ func (ca *ChanAdaptor[T]) Subscripter(receiver string, fn Handler[T]) {
 
 // make sure all receivers reg before start()
 func (ca *ChanAdaptor[T]) Start() {
+	if ca.Started {
+		zap.L().Warn("chanAdaptor already started")
+		return
+	}
 	zap.L().Info("chanAdaptor started")
 	ca.Started = true
 	OnServiceStopping(func() {
