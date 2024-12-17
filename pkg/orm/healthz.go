@@ -46,10 +46,12 @@ func init() {
 			db: db,
 		}
 
+		baseUrl := viper.GetString("baseUri")
 		viper.SetDefault(HealthURIKey, HealthURIValue)
 		uri := viper.GetString(HealthURIKey)
 
 		route.GET(uri, controller.Ping)
+		route.GET(baseUrl+uri, controller.Ping)
 		return controller
 	}, ginshared.ControllerOptions)
 }

@@ -204,6 +204,19 @@ func (a *AuthService) Auth(c *gin.Context) {
 	}
 }
 
+func (a *AuthService) ListUsers(Owner string, q string) ([]*AuthKey, error) {
+	result := make([]*AuthKey, 0)
+	tx := a.Db.Where("owner = ? and suspend <> 1 ", Owner)
+	if q != "" {
+		tx = tx.Where("user_name = ? ", q)
+	}
+	err := tx.Find(&result).Error
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (a *AuthService) CreateUser(owner, username, remark, rawKey, storeCode string) (string, error) {
 	u4 := rawKey
 	if u4 == "" {
