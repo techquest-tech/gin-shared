@@ -104,6 +104,11 @@ func CloseOnlyNotified() {
 }
 
 func PrintVersion() {
+	content, err := os.ReadFile("version.txt")
+	if err == nil {
+		println(string(content))
+	}
+
 	zap.L().Info("Application info:", zap.String("appName", AppName),
 		zap.String("verion", Version),
 		zap.String("Go version", runtime.Version()),
