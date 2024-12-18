@@ -50,7 +50,12 @@ func (handle *ReportError) Middleware(c *gin.Context) {
 			if !ok {
 				e = fmt.Errorf("%v", err)
 			}
-			core.ErrorAdaptor.Push(e)
+
+			core.ErrorAdaptor.Push(core.ErrorReport{
+				Error:     e,
+				FullStack: buffer[:n],
+				Uri:       c.Request.RequestURI,
+			})
 			// if core.Bus != nil {
 			// 	core.Bus.Publish(core.EventError, err)
 			// }

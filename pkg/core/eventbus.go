@@ -8,7 +8,7 @@ import (
 var Bus = EventBus.New()
 
 const (
-	EventError    = "event.error"
+	// EventError    = "event.error"
 	EventTracing  = "event.tracing"
 	EventInit     = "event.gin.inited" //trigger when gin ready to service.
 	EventStopping = "event.gin.stopping"

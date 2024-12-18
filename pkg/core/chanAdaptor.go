@@ -100,4 +100,10 @@ func (ca *ChanAdaptor[T]) Start() {
 	zap.L().Info("chanAdaptor and receivers were stopped.")
 }
 
-var ErrorAdaptor = NewChanAdaptor[error](1000) // error adaptor for monitor error.
+type ErrorReport struct {
+	Uri       string
+	FullStack []byte
+	Error     error
+}
+
+var ErrorAdaptor = NewChanAdaptor[ErrorReport](1000) // error adaptor for monitor error.
