@@ -7,7 +7,6 @@ toolchain go1.23.1
 require (
 	github.com/Depado/ginprom v1.8.1
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
-	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-contrib/zap v1.1.4
@@ -20,9 +19,8 @@ require (
 	github.com/samber/lo v1.47.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/tbaehler/gin-keycloak v1.6.1
-	github.com/techquest-tech/monitor v0.1.12
 	github.com/thanhpk/randstr v1.0.6
 	github.com/unrolled/secure v1.17.0
 	github.com/xhit/go-str2duration/v2 v2.1.0
@@ -37,7 +35,6 @@ require (
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/bytedance/sonic/loader v0.2.1 // indirect
-	github.com/carlmjohnson/requests v0.24.2 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -53,7 +50,6 @@ require (
 )
 
 require (
-	github.com/atc0005/go-teams-notify/v2 v2.13.0
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bsm/redislock v0.9.4
 	github.com/bytedance/sonic v1.12.3 // indirect
