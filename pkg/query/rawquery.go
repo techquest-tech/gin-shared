@@ -15,11 +15,12 @@ type RawQueryWhere struct {
 }
 
 type RawQuery struct {
-	Sql    string
-	Preset map[string]any
-	Params []string
-	Where  map[string]string // key: where condition, value: param key, e.g. "id = ?", "id"
-	Order  string
+	Sql     string
+	Preset  map[string]any
+	Params  []string
+	Where   map[string]string // key: where condition, value: param key, e.g. "id = ?", "id"
+	Orderby string
+	Groupby string
 }
 
 func (r *RawQuery) Query(db *gorm.DB, data map[string]any) ([]map[string]any, error) {
@@ -61,9 +62,12 @@ func (r *RawQuery) Query(db *gorm.DB, data map[string]any) ([]map[string]any, er
 			sql = sql + strings.Join(conds, " and ")
 		}
 	}
+	if r.Groupby != "" {
+		sql = sql + " group by " + r.Groupby
+	}
 
-	if r.Order != "" {
-		sql = fmt.Sprintf("%s order by %s", sql, r.Order)
+	if r.Orderby != "" {
+		sql = fmt.Sprintf("%s order by %s", sql, r.Orderby)
 	}
 
 	result := make([]map[string]any, 0)
