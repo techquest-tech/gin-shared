@@ -150,7 +150,7 @@ func InitConfig(p Bootup) error {
 
 	err := loadConfig(configName)
 	if err != nil {
-		log.Printf("load config failed." + err.Error())
+		log.Printf("load config failed. %s", err.Error())
 		// return err
 	}
 	envfile := os.Getenv("ENV")

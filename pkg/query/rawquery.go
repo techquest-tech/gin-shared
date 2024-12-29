@@ -8,6 +8,9 @@ import (
 	"gorm.io/gorm"
 )
 
+const KeyWhere = "{{.where}}"
+
+// it's not enabled yet.
 type RawQueryWhere struct {
 	Cond  string
 	Param string
@@ -40,16 +43,12 @@ func (r *RawQuery) Query(db *gorm.DB, data map[string]any) ([]map[string]any, er
 	}
 
 	if len(r.Where) > 0 {
-		hasWhere := strings.Contains(r.Sql, "where")
-		if !hasWhere {
-			sql = sql + " where "
-		}
 		conds := make([]string, 0)
 		for cond, p := range r.Where {
 			if v, ok := allParams[p]; ok {
 				if s, ok := v.(string); ok {
 					ss := strings.TrimSpace(s)
-					if ss == "" {
+					if ss == "" || ss == "null" || ss == "-" || ss == "none" {
 						zap.L().Debug("empty value ", zap.String("param", p))
 						continue
 					}
@@ -59,7 +58,12 @@ func (r *RawQuery) Query(db *gorm.DB, data map[string]any) ([]map[string]any, er
 			}
 		}
 		if len(conds) > 0 {
-			sql = sql + strings.Join(conds, " and ")
+			conds := strings.Join(conds, " and ")
+			if strings.Contains(sql, KeyWhere) {
+				sql = strings.Replace(sql, KeyWhere, conds, 1)
+			} else {
+				sql = sql + " where " + conds
+			}
 		}
 	}
 	if r.Groupby != "" {
