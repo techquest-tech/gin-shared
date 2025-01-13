@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"go.uber.org/zap"
@@ -24,9 +25,15 @@ type RawQuery struct {
 	Where   map[string]string // key: where condition, value: param key, e.g. "id = ?", "id"
 	Orderby string
 	Groupby string
+	Limit   int
+	Offset  int
 }
 
 func (r *RawQuery) Query(db *gorm.DB, data map[string]any) ([]map[string]any, error) {
+	return Query[map[string]any](db, r, data)
+}
+
+func Query[T any](db *gorm.DB, r *RawQuery, data map[string]any) ([]T, error) {
 	allParams := map[string]any{}
 
 	sql := r.Sql
@@ -66,15 +73,52 @@ func (r *RawQuery) Query(db *gorm.DB, data map[string]any) ([]map[string]any, er
 			}
 		}
 	}
-	if r.Groupby != "" {
-		sql = sql + " group by " + r.Groupby
+
+	groupby := r.Groupby
+	if g, ok := data["groupby"]; ok {
+		groupby = g.(string)
 	}
 
-	if r.Orderby != "" {
-		sql = fmt.Sprintf("%s order by %s", sql, r.Orderby)
+	if groupby != "" {
+		sql = sql + " group by " + groupby
 	}
 
-	result := make([]map[string]any, 0)
+	orderby := r.Orderby
+	if o, ok := data["orderby"]; ok {
+		orderby = o.(string)
+	}
+	if orderby != "" {
+		sql = fmt.Sprintf("%s order by %s", sql, orderby)
+	}
+
+	limit := r.Limit
+	if l, ok := data["limit"]; ok {
+		ll, err := strconv.Atoi(l.(string))
+		if err != nil {
+			zap.L().Warn("invalid limit", zap.Error(err), zap.String("limit", l.(string)))
+		} else {
+			limit = ll
+		}
+	}
+
+	if limit > 0 {
+		sql = fmt.Sprintf("%s limit %d", sql, limit)
+	}
+
+	offset := r.Offset
+	if o, ok := data["offset"]; ok {
+		oo, err := strconv.Atoi(o.(string))
+		if err != nil {
+			zap.L().Warn("invalid offset", zap.Error(err), zap.String("offset", o.(string)))
+		} else {
+			offset = oo
+		}
+	}
+	if offset > 0 {
+		sql = fmt.Sprintf("%s offset %d", sql, offset)
+	}
+
+	result := make([]T, 0)
 
 	tx := db.Raw(sql, params...)
 

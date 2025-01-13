@@ -18,7 +18,7 @@ func DisableGormLogger() gormlogger.Interface {
 	return gormlogger.Discard
 }
 
-func NewGormLogger(slowThreshold time.Duration, logLeveal string) *GormLogger {
+func NewGormLogger(slowThreshold time.Duration, logLeveal string) gormlogger.Interface {
 	ll := gormlogger.Error
 	switch logLeveal {
 	case "info":
