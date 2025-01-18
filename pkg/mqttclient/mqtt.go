@@ -1,12 +1,23 @@
 package mqttclient
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"os"
+	"strings"
+
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 )
+
+type TlsConfig struct {
+	Ca   string
+	Key  string
+	Cert string
+}
 
 type MqttService struct {
 	Endpoint     string
@@ -15,6 +26,7 @@ type MqttService struct {
 	ClientID     string
 	Cleansession bool
 	Qos          byte
+	TlsConfig    *TlsConfig
 	subs         map[string]mqtt.MessageHandler
 	Logger       *zap.Logger
 	Client       mqtt.Client
@@ -51,8 +63,7 @@ func (m *MqttService) OnConnect(c mqtt.Client) {
 }
 
 func (m *MqttService) LogMessage(c mqtt.Client, msg mqtt.Message) {
-
-	m.Logger.Info("received message", zap.String("ID", m.ClientID), zap.String("topic", msg.Topic()))
+	m.Logger.Info("received message", zap.String("ClientID", m.ClientID), zap.String("topic", msg.Topic()))
 	m.Logger.Info("message body", zap.String("msg", string(msg.Payload())))
 }
 
@@ -78,6 +89,43 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 	opts := mqtt.NewClientOptions().AddBroker(broke.Endpoint).
 		SetClientID(broke.ClientID).
 		SetCleanSession(broke.Cleansession)
+
+	// check if SSL enabled
+	if strings.HasPrefix(broke.Endpoint, "ssl://") {
+		if broke.TlsConfig == nil {
+			broke.TlsConfig = &TlsConfig{
+				Ca:   "config/certs/ca.pem",
+				Key:  "config/certs/client.key",
+				Cert: "config/certs/client.pem",
+			}
+		}
+		logger.Info("mqtt ssl enabled")
+
+		tlsConfig := &tls.Config{}
+		if broke.TlsConfig.Ca != "" {
+			// load Ca cert
+			caCert, err := os.ReadFile(broke.TlsConfig.Ca)
+			if err != nil {
+				logger.Error("load ca cert failed", zap.Error(err))
+				return nil, err
+			}
+			caCertPool := x509.NewCertPool()
+			caCertPool.AppendCertsFromPEM(caCert)
+			tlsConfig.RootCAs = caCertPool
+		}
+
+		if broke.TlsConfig.Cert != "" && broke.TlsConfig.Key != "" {
+			// load client cert
+			cert, err := tls.LoadX509KeyPair(broke.TlsConfig.Cert, broke.TlsConfig.Key)
+			if err != nil {
+				logger.Error("load client cert failed", zap.Error(err))
+				return nil, err
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		}
+
+		opts.SetTLSConfig(tlsConfig)
+	}
 
 	opts.OnConnectionLost = func(c mqtt.Client, err error) {
 		logger.Error("connection lost", zap.Error(err))
