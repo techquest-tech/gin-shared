@@ -15,19 +15,35 @@ type Schedule struct {
 	Startups []core.Startup `group:"startups"`
 }
 
-// scheduleCmd represents the schedule command
-var ScheduleCmd = &cobra.Command{
-	Use:   "schedule",
-	Short: "start the schedule job only",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return core.GetContainer().Invoke(func(p Schedule) error {
-			core.NotifyStarted()
-			CloseOnlyNotified()
-			core.NotifyStopping()
-			return nil
-		})
-	},
+func ScheduleLikeCmd(cmdUse, cmdShort string) *cobra.Command {
+	return &cobra.Command{
+		Use:   cmdUse,
+		Short: cmdShort,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return core.GetContainer().Invoke(func(p Schedule) error {
+				core.NotifyStarted()
+				CloseOnlyNotified()
+				core.NotifyStopping()
+				return nil
+			})
+		}}
 }
+
+// scheduleCmd represents the schedule command
+var ScheduleCmd = ScheduleLikeCmd("schedule", "start the schedule job only")
+
+// &cobra.Command{
+// 	Use:   "schedule",
+// 	Short: "start the schedule job only",
+// 	RunE: func(cmd *cobra.Command, args []string) error {
+// 		return core.GetContainer().Invoke(func(p Schedule) error {
+// 			core.NotifyStarted()
+// 			CloseOnlyNotified()
+// 			core.NotifyStopping()
+// 			return nil
+// 		})
+// 	},
+// }
 
 var RunJobCmd = &cobra.Command{
 	Use:   "job",

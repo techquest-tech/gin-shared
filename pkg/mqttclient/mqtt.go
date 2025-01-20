@@ -3,13 +3,14 @@ package mqttclient
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"math"
 	"os"
 	"strings"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
+	"github.com/thanhpk/randstr"
 	"go.uber.org/zap"
 )
 
@@ -20,16 +21,17 @@ type TlsConfig struct {
 }
 
 type MqttService struct {
-	Endpoint     string
-	User         string
-	Password     string
-	ClientID     string
-	Cleansession bool
-	Qos          byte
-	TlsConfig    *TlsConfig
-	subs         map[string]mqtt.MessageHandler
-	Logger       *zap.Logger
-	Client       mqtt.Client
+	Endpoint      string
+	User          string
+	Password      string
+	ClientID      string
+	Cleansession  bool
+	AutoReconnect bool
+	Qos           byte
+	TlsConfig     *TlsConfig
+	subs          map[string]mqtt.MessageHandler
+	Logger        *zap.Logger
+	Client        mqtt.Client
 }
 
 func init() {
@@ -69,10 +71,11 @@ func (m *MqttService) LogMessage(c mqtt.Client, msg mqtt.Message) {
 
 func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 	broke := &MqttService{
-		Endpoint: "tcp://127.0.0.1:1883",
-		Logger:   logger,
-		ClientID: core.AppName,
-		subs:     make(map[string]mqtt.MessageHandler),
+		Endpoint:      "tcp://127.0.0.1:1883",
+		Logger:        logger,
+		Qos:           0,
+		AutoReconnect: true,
+		subs:          make(map[string]mqtt.MessageHandler),
 	}
 
 	settings := viper.Sub("mqtt")
@@ -81,14 +84,16 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 	}
 
 	if broke.ClientID == "" {
-		broke.ClientID = uuid.NewString()
+		broke.ClientID = strings.ReplaceAll(core.AppName, " ", "_") + randstr.Hex(16)
 		broke.Cleansession = true
 		logger.Warn("MQTT clientID is empty, use UUID as clientID")
 	}
 
 	opts := mqtt.NewClientOptions().AddBroker(broke.Endpoint).
 		SetClientID(broke.ClientID).
-		SetCleanSession(broke.Cleansession)
+		SetCleanSession(broke.Cleansession).
+		SetAutoReconnect(broke.AutoReconnect).
+		SetMaxResumePubInFlight(math.MaxInt32)
 
 	// check if SSL enabled
 	if strings.HasPrefix(broke.Endpoint, "ssl://") {
@@ -147,6 +152,8 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 
 	broke.Client = c
 
-	logger.Info("mqtt init done.", zap.String("endpoint", broke.Endpoint), zap.Bool("cleansession", broke.Cleansession))
+	logger.Info("mqtt init done.", zap.String("endpoint", broke.Endpoint),
+		zap.String("clientID", broke.ClientID), zap.Int("qos", int(broke.Qos)),
+		zap.Bool("cleansession", broke.Cleansession))
 	return broke, nil
 }
