@@ -161,5 +161,10 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 	logger.Info("mqtt init done.", zap.String("endpoint", broke.Endpoint),
 		zap.String("clientID", broke.ClientID), zap.Int("qos", int(broke.Qos)),
 		zap.Bool("cleansession", broke.Cleansession))
+
+	core.OnServiceStopping(func() {
+		c.Disconnect(1000)
+		logger.Info("mqtt client stopped")
+	})
 	return broke, nil
 }
