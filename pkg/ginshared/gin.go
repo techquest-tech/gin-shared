@@ -22,9 +22,13 @@ const (
 	KeyInitDB   = "database.initDB"
 )
 
+func GetbaseUrl() string {
+	viper.SetDefault("baseUri", "/v1")
+	return viper.GetString("baseUri")
+}
+
 func initEngine(logger *zap.Logger, bus EventBus.Bus, p *Components,
 	tls *Tlssettings) *gin.Engine {
-
 	router := gin.New()
 	router.Use(ginzap.Ginzap(logger, time.RFC3339, false))
 	router.Use(ginzap.RecoveryWithZap(logger, true))

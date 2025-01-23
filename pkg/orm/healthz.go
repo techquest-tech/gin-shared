@@ -46,7 +46,7 @@ func init() {
 			db: db,
 		}
 
-		baseUrl := viper.GetString("baseUri")
+		baseUrl := ginshared.GetbaseUrl()
 		viper.SetDefault(HealthURIKey, HealthURIValue)
 		uri := viper.GetString(HealthURIKey)
 

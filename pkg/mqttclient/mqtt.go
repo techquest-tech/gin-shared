@@ -69,7 +69,7 @@ func (m *MqttService) LogMessage(c mqtt.Client, msg mqtt.Message) {
 	m.Logger.Info("message body", zap.String("msg", string(msg.Payload())))
 }
 
-func InitMqtt(logger *zap.Logger) (*MqttService, error) {
+func NewMqttOptions(logger *zap.Logger) (*mqtt.ClientOptions, *MqttService, error) {
 	broke := &MqttService{
 		Endpoint:      "tcp://127.0.0.1:1883",
 		Logger:        logger,
@@ -112,7 +112,7 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 			caCert, err := os.ReadFile(broke.TlsConfig.Ca)
 			if err != nil {
 				logger.Error("load ca cert failed", zap.Error(err))
-				return nil, err
+				return nil, nil, err
 			}
 			caCertPool := x509.NewCertPool()
 			caCertPool.AppendCertsFromPEM(caCert)
@@ -124,7 +124,7 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 			cert, err := tls.LoadX509KeyPair(broke.TlsConfig.Cert, broke.TlsConfig.Key)
 			if err != nil {
 				logger.Error("load client cert failed", zap.Error(err))
-				return nil, err
+				return nil, nil, err
 			}
 			tlsConfig.Certificates = []tls.Certificate{cert}
 		}
@@ -132,14 +132,20 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 		opts.SetTLSConfig(tlsConfig)
 	}
 
-	opts.OnConnectionLost = func(c mqtt.Client, err error) {
-		logger.Error("connection lost", zap.Error(err))
-	}
-	opts = opts.SetAutoReconnect(true)
-
 	if broke.User != "" {
 		opts.Username = broke.User
 		opts.Password = broke.Password
+	}
+	return opts, broke, nil
+}
+
+func InitMqtt(logger *zap.Logger) (*MqttService, error) {
+	opts, broke, err := NewMqttOptions(logger)
+	if err != nil {
+		return nil, err
+	}
+	opts.OnConnectionLost = func(c mqtt.Client, err error) {
+		logger.Error("connection lost", zap.Error(err))
 	}
 	opts.OnConnect = broke.OnConnect
 
