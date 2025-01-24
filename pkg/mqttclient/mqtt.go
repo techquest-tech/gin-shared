@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"sync"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/spf13/viper"
@@ -38,7 +39,11 @@ func init() {
 	core.GetContainer().Provide(InitMqtt)
 }
 
+var ll = sync.Mutex{}
+
 func (m *MqttService) Sub(topic string, handle mqtt.MessageHandler) {
+	ll.Lock()
+	defer ll.Unlock()
 	if m.subs == nil {
 		m.subs = make(map[string]mqtt.MessageHandler)
 	}
@@ -73,7 +78,7 @@ func NewMqttOptions(logger *zap.Logger) (*mqtt.ClientOptions, *MqttService, erro
 	broke := &MqttService{
 		Endpoint:      "tcp://127.0.0.1:1883",
 		Logger:        logger,
-		Qos:           0,
+		Qos:           1,
 		AutoReconnect: true,
 		subs:          make(map[string]mqtt.MessageHandler),
 	}
@@ -87,6 +92,11 @@ func NewMqttOptions(logger *zap.Logger) (*mqtt.ClientOptions, *MqttService, erro
 		broke.ClientID = strings.ReplaceAll(core.AppName, " ", "_") + randstr.Hex(16)
 		broke.Cleansession = true
 		logger.Warn("MQTT clientID is empty, use UUID as clientID")
+	} else {
+		if strings.Contains(broke.ClientID, "{{.hostname}}") {
+			hs, _ := os.Hostname()
+			broke.ClientID = strings.ReplaceAll(broke.ClientID, "{{.hostname}}", hs)
+		}
 	}
 
 	opts := mqtt.NewClientOptions().AddBroker(broke.Endpoint).
