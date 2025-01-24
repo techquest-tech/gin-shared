@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -19,13 +20,13 @@ import (
 	"gorm.io/gorm"
 )
 
-var startedEvent = sync.Once{}
-
-var beforebootup = sync.Once{}
-
-// var endEvent = sync.Once{}
-
-var delay time.Duration
+var (
+	startedEvent  = sync.Once{}
+	beforebootup  = sync.Once{}
+	delay         time.Duration
+	once          sync.Once
+	GraceShutdown = 5 * time.Second
+)
 
 func NotifyStarted() {
 	go GetContainer().Invoke(func(p OptionalParam[EventBus.Bus]) {
@@ -49,18 +50,7 @@ func NotifyStarted() {
 	})
 }
 
-func NotifyStopping() {
-	// GetContainer().Invoke(func(p OptionalParam[EventBus.Bus]) {
-	// 	if p.P != nil {
-	// 		endEvent.Do(func() {
-	// 			p.P.Publish(EventStopping)
-	// 			p.P.WaitAsync()
-	// 			// time.Sleep(time.Second)
-	// 			zap.L().Info("service stopped")
-	// 		})
-	// 	}
-	// })
-
+func NotifyStopping() { // not used anymore, empty fun only.
 }
 
 func BeforeBootup(key string) {
@@ -80,8 +70,6 @@ type ServiceParam struct {
 	Bus    EventBus.Bus
 }
 
-var once sync.Once
-
 func CloseOnlyNotified() {
 	once.Do(func() {
 		sigCh := make(chan os.Signal, 1)
@@ -90,16 +78,36 @@ func CloseOnlyNotified() {
 
 		<-sigCh
 
-		fmt.Printf("app existing...")
+		logger := zap.L()
 
-		Bus.Publish(EventStopping)
-		Bus.WaitAsync()
+		fmt.Println("app existing...")
+
+		ctx, c := context.WithTimeout(context.Background(), GraceShutdown)
+
+		defer c()
+
+		shutdownDone := make(chan bool)
+
+		go func() {
+			Bus.Publish(EventStopping)
+			Bus.WaitAsync()
+			shutdownDone <- true
+		}()
+
+		select {
+		case <-ctx.Done():
+			logger.Warn("graceful shutdown timed out, forcing shutdown")
+		case <-shutdownDone:
+			// fmt.Printf("done\n")
+			logger.Info("cleanup done.")
+		}
 
 		if delay > 0 {
+			logger.Info("delaying shutdown for", zap.Duration("duration", delay))
 			time.Sleep(delay)
 		}
 
-		zap.L().Info("service stopped")
+		logger.Info("service stopped")
 	})
 }
 
