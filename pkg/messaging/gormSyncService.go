@@ -54,7 +54,7 @@ func (ss *GormObjSyncService) toAbandoned(kp *GormPayload, errCode, topic, consu
 }
 
 func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic, consumer string, raw []byte) error {
-	kp, err := toKeyAndPayload(raw)
+	kp, err := ToKeyAndPayload(raw)
 	if err != nil {
 		ss.Logger.Error("unexpected payload", zap.Error(err))
 		return err
@@ -67,7 +67,7 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 		return nil
 	}
 	payload := reflect.New(tt).Interface()
-	err = json.Unmarshal(kp.Payload, payload)
+	err = json.Unmarshal([]byte(kp.Payload), payload)
 	if err != nil {
 		l.Info("unexpected payload,", zap.Error(err))
 		ss.toAbandoned(kp, err.Error(), topic, consumer)
@@ -129,10 +129,11 @@ const (
 type GormPayload struct {
 	Key     string
 	Action  GormAction
-	Payload []byte
+	Payload string
+	SynctAt time.Time
 }
 
-func toKeyAndPayload(raw []byte) (*GormPayload, error) {
+func ToKeyAndPayload(raw []byte) (*GormPayload, error) {
 	var payload GormPayload
 	err := json.Unmarshal(raw, &payload)
 	if err != nil {
@@ -178,57 +179,78 @@ func QueryEntities[T any](ctx context.Context, db *gorm.DB, logger *zap.Logger, 
 	return lo.ToAnySlice(rr), nil
 }
 
-func PubEntitiesSince(ctx context.Context, key string, since time.Time, to time.Time) error {
+func allSyncKey() []string {
+	allKeys := lo.Keys(m)
+	sort.Strings(allKeys)
+	return allKeys
+}
+
+func PubEntitiesSince(ctx context.Context, keys []string, since time.Time, to time.Time) error {
 	return core.GetContainer().Invoke(func(db *gorm.DB, logger *zap.Logger, msService MessagingService) error {
 		if ms == nil {
 			ms = msService
 		}
-		l := logger.With(zap.String("key", key))
-		fn, ok := mSlice[key]
-		if !ok {
-			keys := lo.Keys(m)
-			sort.Strings(keys)
-			return fmt.Errorf("%s is not registered, avaible keys: \n%s", key, strings.Join(keys, "\t\n"))
-		}
-
-		fnitem := func(deleted bool) error {
-			index := 0
-			processed := 0
-
-			for {
-				rr, err := fn(ctx, db, l, since, to, index, deleted)
-				if err != nil {
-					return err
-				}
-				l.Info("result len", zap.Int("len", len(rr)))
-
-				action := GormActionSave
-				if deleted {
-					action = GormActionDelete
-				}
-
-				for _, item := range rr {
-					pubGormAction(ctx, item, action)
-				}
-
-				processed += len(rr)
-				index++
-				if len(rr) < SyncPageSize {
-					l.Info("no more data", zap.Int("processed", processed), zap.Bool("forDeleted", deleted))
-					break
-				}
-			}
+		if len(keys) == 0 {
+			logger.Info("no keys to sync, or use * to sync all keys")
 			return nil
 		}
-		l.Info("sync entities")
-		err := fnitem(false)
-		if err != nil {
-			return err
+		if lo.Contains(keys, "*") {
+			keys = allSyncKey()
+			logger.Info("going to sync all keys", zap.Strings("keys", keys))
 		}
 
-		l.Info("sync deleted entities")
-		err = fnitem(true)
+		for _, key := range keys {
+			l := logger.With(zap.String("key", key))
+			fn, ok := mSlice[key]
 
-		return err
+			if !ok {
+				keys := lo.Keys(m)
+				sort.Strings(keys)
+				return fmt.Errorf("%s is not registered, avaible keys: \n%s", key, strings.Join(keys, "\t\n"))
+			}
+
+			fnitem := func(deleted bool) error {
+				index := 0
+				processed := 0
+
+				for {
+					rr, err := fn(ctx, db, l, since, to, index, deleted)
+					if err != nil {
+						return err
+					}
+					l.Info("result len", zap.Int("len", len(rr)))
+
+					action := GormActionSave
+					if deleted {
+						action = GormActionDelete
+					}
+
+					for _, item := range rr {
+						pubGormAction(ctx, item, action)
+					}
+
+					processed += len(rr)
+					index++
+					if len(rr) < SyncPageSize {
+						l.Info("no more data", zap.Int("processed", processed), zap.Bool("forDeleted", deleted))
+						break
+					}
+				}
+				return nil
+			}
+			l.Info("sync entities")
+			err := fnitem(false)
+			if err != nil {
+				return err
+			}
+
+			l.Info("sync deleted entities")
+			err = fnitem(true)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
 	})
 }

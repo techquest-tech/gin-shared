@@ -83,7 +83,7 @@ func pubGormAction(ctx context.Context, payload any, action GormAction) error {
 		logger.Error("marshal payload failed.", zap.Error(err))
 		return err
 	}
-	ms.Pub(ctx, DefaultGormToipc, GormPayload{Key: key, Payload: raw, Action: action})
+	ms.Pub(ctx, DefaultGormToipc, GormPayload{Key: key, Payload: string(raw), Action: action})
 	logger.Debug("callback done.")
 	return nil
 }
