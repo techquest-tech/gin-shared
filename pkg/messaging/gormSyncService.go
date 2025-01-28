@@ -42,7 +42,7 @@ var cfg = &gorm.Session{
 	SkipDefaultTransaction: true,
 }
 
-func (ss *GormObjSyncService) toAbandoned(kp *GormPayload, errCode, topic, consumer string) {
+func (ss *GormObjSyncService) Abandoned(kp *GormPayload, errCode, topic, consumer string) {
 	AbandonedChan <- map[string]any{
 		"error":    errCode,
 		"topic":    topic,
@@ -51,6 +51,54 @@ func (ss *GormObjSyncService) toAbandoned(kp *GormPayload, errCode, topic, consu
 		"action":   kp.Action,
 		"data":     kp.Payload,
 	}
+}
+
+func (ss *GormObjSyncService) ProcessGormObject(ctx context.Context, topic, consumer string, kp *GormPayload, payload any, tt reflect.Type) error {
+	l := ss.Logger.With(zap.String("key", kp.Key))
+	tx := ss.DB.Session(cfg)
+
+	id, hasID := GetPayloadID(payload)
+
+	if ss.Sharding != nil {
+		tablename, err := ss.Sharding(tx, kp.Key, payload)
+		if err != nil {
+			ss.Abandoned(kp, "ShardingFailed:"+err.Error(), topic, consumer)
+			return err
+		}
+		tx = tx.Table(tablename)
+		l.Debug("sharding table for payload", zap.String("table", tablename))
+	}
+
+	switch kp.Action {
+	case GormActionSave, "":
+		err := tx.Save(payload).Error
+		if err != nil {
+			l.Error("save object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
+			ss.Abandoned(kp, "SaveFailed:"+err.Error(), topic, consumer)
+			return err
+		}
+		l.Info("save object done.", zap.String("data", tt.Name()), zap.Uint("id", id))
+	case GormActionDelete:
+		if hasID && id == 0 {
+			l.Warn("empty ID for delete action, just ignore it.", zap.Any("payload", payload))
+			// DroppedPayload.Push(&FailedPayload{Payload: payload, Key: kp.Key, FailedCode: "empty_id"})
+			ss.Abandoned(kp, "DeletedOnEmptyID", topic, consumer)
+			return nil
+		}
+		err := tx.Delete(payload).Error
+		if err != nil {
+			l.Error("delete object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
+			ss.Abandoned(kp, "DeleteFailed:"+err.Error(), topic, consumer)
+			return err
+		}
+		l.Info("delete object done.", zap.String("data", tt.Name()), zap.Uint("id", id))
+	default:
+		ss.Logger.Info("unknown action.", zap.String("action", string(kp.Action)))
+		// return errors.ErrUnsupported
+		ss.Abandoned(kp, "UnknownAction", topic, consumer)
+	}
+
+	return nil
 }
 
 func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic, consumer string, raw []byte) error {
@@ -63,60 +111,17 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 	tt, ok := m[kp.Key]
 	if !ok {
 		l.Error("received object failed. unknown key, just drop it.", zap.String("key", kp.Key))
-		ss.toAbandoned(kp, "UnknownKey", topic, consumer)
+		ss.Abandoned(kp, "UnknownKey", topic, consumer)
 		return nil
 	}
 	payload := reflect.New(tt).Interface()
 	err = json.Unmarshal([]byte(kp.Payload), payload)
 	if err != nil {
 		l.Info("unexpected payload,", zap.Error(err))
-		ss.toAbandoned(kp, err.Error(), topic, consumer)
+		ss.Abandoned(kp, err.Error(), topic, consumer)
 		return err
 	}
-	tx := ss.DB.Session(cfg)
-
-	id, hasID := GetPayloadID(payload)
-
-	if ss.Sharding != nil {
-		tablename, err := ss.Sharding(tx, kp.Key, payload)
-		if err != nil {
-			ss.toAbandoned(kp, "ShardingFailed:"+err.Error(), topic, consumer)
-			return err
-		}
-		tx = tx.Table(tablename)
-		l.Debug("sharding table for payload", zap.String("table", tablename))
-	}
-
-	switch kp.Action {
-	case GormActionSave, "":
-		err = tx.Save(payload).Error
-		if err != nil {
-			l.Error("save object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
-			ss.toAbandoned(kp, "SaveFailed:"+err.Error(), topic, consumer)
-			return err
-		}
-		l.Info("save object done.", zap.String("data", tt.Name()), zap.Uint("id", id))
-	case GormActionDelete:
-		if hasID && id == 0 {
-			l.Warn("empty ID for delete action, just ignore it.", zap.Any("payload", payload))
-			// DroppedPayload.Push(&FailedPayload{Payload: payload, Key: kp.Key, FailedCode: "empty_id"})
-			ss.toAbandoned(kp, "DeletedOnEmptyID", topic, consumer)
-			return nil
-		}
-		err = tx.Delete(payload).Error
-		if err != nil {
-			l.Error("delete object failed.", zap.Error(err), zap.String("data", tt.Name()), zap.Any("payload", payload))
-			ss.toAbandoned(kp, "DeleteFailed:"+err.Error(), topic, consumer)
-			return err
-		}
-		l.Info("delete object done.", zap.String("data", tt.Name()), zap.Uint("id", id))
-	default:
-		ss.Logger.Info("unknown action.", zap.String("action", string(kp.Action)))
-		// return errors.ErrUnsupported
-		ss.toAbandoned(kp, "UnknownAction", topic, consumer)
-	}
-
-	return nil
+	return ss.ProcessGormObject(ctx, topic, consumer, kp, payload, tt)
 }
 
 type GormAction string
