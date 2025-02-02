@@ -29,11 +29,14 @@ func NewGormObjSyncService(ms MessagingService, logger *zap.Logger, db *gorm.DB)
 
 type Sharding func(tx *gorm.DB, key string, payload any) (tablename string, err error)
 
+type DispathFn func(ctx context.Context, topic, consumer string, kp *GormPayload, payload any, tt reflect.Type) error
+
 type GormObjSyncService struct {
 	MessageService MessagingService
 	DB             *gorm.DB
 	Logger         *zap.Logger
 	Sharding       Sharding
+	Dispath        DispathFn
 }
 
 var cfg = &gorm.Session{
@@ -121,7 +124,11 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 		ss.Abandoned(kp, err.Error(), topic, consumer)
 		return err
 	}
-	return ss.ProcessGormObject(ctx, topic, consumer, kp, payload, tt)
+	fn := ss.Dispath
+	if fn == nil {
+		fn = ss.ProcessGormObject
+	}
+	return fn(ctx, topic, consumer, kp, payload, tt)
 }
 
 type GormAction string
@@ -147,7 +154,7 @@ func ToKeyAndPayload(raw []byte) (*GormPayload, error) {
 	return &payload, nil
 }
 
-const SyncPageSize = 1000
+var SyncPageSize = 1000
 
 type QueryFn func(ctx context.Context, db *gorm.DB, logger *zap.Logger, since time.Time, to time.Time, index int, queryDeleted bool) ([]any, error)
 
