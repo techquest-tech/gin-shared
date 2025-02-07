@@ -166,7 +166,7 @@ func NewCacheProvider[T any](t time.Duration) CacheProvider[T] {
 	})
 	if err != nil {
 		zap.L().Error("new cache provider failed.", zap.Error(err))
-		// panic(err)
+		panic(err)
 	}
 	return rr
 }

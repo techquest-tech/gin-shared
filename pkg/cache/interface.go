@@ -78,6 +78,12 @@ type CachedResult[T any, R any] struct {
 	Cache *Cache[T]
 }
 
+func NewCachedResult[T any, R any](timeout time.Duration) *CachedResult[T, R] {
+	return &CachedResult[T, R]{
+		Cache: NewWithTimeout[T](timeout),
+	}
+}
+
 func hashKey(req any) (string, error) {
 	switch v := req.(type) {
 	case WithKey:
