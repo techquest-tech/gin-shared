@@ -24,8 +24,8 @@ type RawQuerySerice struct {
 
 type SerivceItem struct {
 	Uri     string
-	Query   RawQuery
-	Details *RawQuery
+	Query   RawQuery  // header
+	Details *RawQuery // details
 }
 
 func init() {
@@ -99,7 +99,7 @@ func readParams(c *gin.Context) map[string]interface{} {
 func (service *RawQuerySerice) handleDetails(header, details RawQuery) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		p := readParams(c)
-		result := map[string]interface{}{}
+		result := map[string]any{}
 		r, err := header.Query(service.db, p)
 		if err != nil {
 			service.logger.Error("read header information failed.", zap.Error(err), zap.String("sql", header.Sql))
