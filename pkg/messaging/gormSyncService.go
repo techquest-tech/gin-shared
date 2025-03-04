@@ -120,7 +120,7 @@ func (ss *GormObjSyncService) ReceiveGormObjectSaved(ctx context.Context, topic,
 	payload := reflect.New(tt).Interface()
 	err = json.Unmarshal([]byte(kp.Payload), payload)
 	if err != nil {
-		l.Info("unexpected payload,", zap.Error(err))
+		l.Error("unexpected payload,", zap.Error(err))
 		ss.Abandoned(kp, err.Error(), topic, consumer)
 		return err
 	}

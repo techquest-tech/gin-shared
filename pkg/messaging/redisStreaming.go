@@ -98,7 +98,7 @@ func (msg *DefaultMessgingService) handleMessage(ctx context.Context, topic, gro
 	if resp.Err() != nil {
 		logger.Error("ack message failed.", zap.Error(resp.Err()))
 	}
-	logger.Info("process done")
+	logger.Debug("process done")
 	return nil
 }
 

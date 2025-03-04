@@ -38,6 +38,10 @@ func GetRegisted() []any {
 	return registedEntity
 }
 
+func GetMapping() map[string]reflect.Type {
+	return m
+}
+
 // should never pass any into this function
 func Reg[T any](payload T) {
 	tt := reflect.TypeOf(payload)
