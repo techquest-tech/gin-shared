@@ -12,11 +12,16 @@ import (
 )
 
 var (
-	chSender chan any
-	ms       MessagingService
+	chSender      chan any
+	ms            MessagingService
+	AbandonedChan chan any
 )
 
 func init() {
+
+	AbandonedChan = make(chan any)
+	go core.AppendToFile(AbandonedChan, "receivedAbandoned.log")
+
 	core.ProvideStartup(func(service MessagingService, db *gorm.DB) core.Startup {
 		ms = service
 		db.Callback().Create().After("gorm:after_create").Register("messaging", messageCallbackForUpdate)

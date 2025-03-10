@@ -21,7 +21,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var AbandonedChan chan any
+// var AbandonedChan chan any
 
 var ConsumerName string
 
@@ -250,9 +250,6 @@ func (msg *DefaultMessgingService) Sub(ctx context.Context, topic, group string,
 }
 
 func init() {
-	AbandonedChan = make(chan any)
-	go core.AppendToFile(AbandonedChan, "receivedAbandoned.log")
-
 	core.Provide(func(client *redis.Client, logger *zap.Logger) (MessagingService, *DefaultMessgingService) {
 		d := &DefaultMessgingService{
 			Client: client,

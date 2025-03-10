@@ -1,6 +1,9 @@
 package core
 
 import (
+	"context"
+	"time"
+
 	"github.com/asaskevich/EventBus"
 	"go.uber.org/zap"
 )
@@ -46,4 +49,19 @@ func OnServiceStopping(fn SystenEvent) {
 
 func OnEvent(topic string, fn any) {
 	Bus.Subscribe(topic, fn)
+}
+
+type RootRootCtx context.Context
+
+func RootCtx() RootRootCtx {
+	nctx, cancel := context.WithCancel(context.Background())
+	OnServiceStopping(func() {
+		cancel()
+		time.Sleep(GraceShutdown)
+	})
+	return nctx
+}
+
+func init() {
+	Provide(RootCtx)
 }
