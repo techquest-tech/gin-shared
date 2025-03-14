@@ -31,6 +31,7 @@ type RedisLocker struct {
 //		r.Logger.Info("redis locker ready.", zap.String("redis", r.RedisOptions.Addr))
 //	}
 func (r *RedisLocker) WaitForLocker(ctx context.Context, resource string, maxWait time.Duration, timeout time.Duration) (Release, error) {
+	ll := r.Logger.With(zap.String("resource", resource))
 	locker := redislock.New(r.client)
 	if timeout == 0 {
 		timeout = MaxLockerDuration
@@ -40,33 +41,33 @@ func (r *RedisLocker) WaitForLocker(ctx context.Context, resource string, maxWai
 	if maxWait >= WaitInteval {
 		maxRetry := int(maxWait / WaitInteval)
 		opt.RetryStrategy = redislock.LimitRetry(redislock.LinearBackoff(WaitInteval), maxRetry)
-		r.Logger.Info("max wait for locker", zap.Duration("maxWait", maxWait))
+		ll.Info("max wait for locker", zap.Duration("maxWait", maxWait))
 	}
 
 	lock, err := locker.Obtain(ctx, LockerPrefix+resource, timeout, opt)
 	if err != nil {
-		r.Logger.Error("lock failed", zap.Error(err))
+		ll.Error("lock failed", zap.Error(err))
 		if err == redislock.ErrNotObtained {
-			r.Logger.Warn("resource is locked.", zap.Error(err), zap.String("resource", resource))
+			ll.Warn("resource is locked.", zap.Error(err))
 			return nil, errors.New(resource + " is locked.")
 		}
 		// panic("unexpected error, " + err.Error())
 		return nil, err
 	}
-	r.Logger.Debug("lock obtained", zap.String("resource", resource))
+	ll.Debug("lock obtained")
 	return func(ctx context.Context) error {
 		err := lock.Release(context.Background())
 		if err != nil {
-			r.Logger.Error("release locker failed. try to delete it", zap.Error(err), zap.String("resource", resource))
+			ll.Error("release locker failed. try to delete it", zap.Error(err))
 			err = r.client.Del(context.Background(), resource).Err()
 			if err != nil {
-				r.Logger.Error("delete locker failed", zap.Error(err), zap.String("resource", resource))
+				ll.Error("delete locker failed", zap.Error(err))
 				return err
 			}
-			r.Logger.Info("deleted locker done.")
+			ll.Info("deleted locker done.")
 			return nil
 		}
-		r.Logger.Debug("release locker done.", zap.String("resource", resource))
+		ll.Debug("release locker done.")
 		return nil
 	}, nil
 }
