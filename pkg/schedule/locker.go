@@ -33,7 +33,8 @@ func (sl *ScheduleLoker) Wrapper() cron.JobWrapper {
 			release, err := sl.Locker.LockWithtimeout(ctx, sl.Jobname, LockerTimeout)
 			if err != nil {
 				logger.Info("get locker failed. job cancel.", zap.Error(err))
-				panic(errlockerFailed)
+				// panic(errlockerFailed)
+				return
 			}
 			defer release(ctx)
 			// logger.Debug("got locker")
