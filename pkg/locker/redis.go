@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var MaxLockerDuration time.Duration = 30 * time.Minute
+var MaxLockerDuration time.Duration = 30 * time.Second
 var WaitInteval time.Duration = 50 * time.Millisecond
 
 const (
@@ -43,7 +43,7 @@ func (r *RedisLocker) WaitForLocker(ctx context.Context, resource string, maxWai
 		opt.RetryStrategy = redislock.LimitRetry(redislock.LinearBackoff(WaitInteval), maxRetry)
 		ll.Info("max wait for locker", zap.Duration("maxWait", maxWait))
 	}
-
+	ll.Info("request locker", zap.String("resource", resource), zap.Duration("timeout", timeout))
 	lock, err := locker.Obtain(ctx, LockerPrefix+resource, timeout, opt)
 	if err != nil {
 		ll.Error("lock failed", zap.Error(err))
