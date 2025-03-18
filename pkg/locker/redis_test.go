@@ -3,6 +3,7 @@ package locker_test
 import (
 	"context"
 	"log"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -121,6 +122,34 @@ func TestRedisLocker2(t *testing.T) {
 			defer release(ctx)
 		}()
 
+		g.Wait()
+	})
+	assert.Nil(t, err)
+}
+
+func TestLockerFailed(t *testing.T) {
+	err := core.GetContainer().Invoke(func(locker locker.Locker) {
+		resourceName := "test"
+		ctx := context.Background()
+		fn := func(index int) {
+			release, err := locker.LockWithtimeout(ctx, resourceName, 5*time.Second)
+			// assert.NotNil(t, err)
+			if err != nil {
+				log.Print("get lock failed for " + strconv.Itoa(index) + ", " + err.Error())
+			} else {
+				time.Sleep(2 * time.Second)
+				release(ctx)
+				log.Print("release lock done for " + strconv.Itoa(index))
+			}
+		}
+
+		g := sync.WaitGroup{}
+		g.Add(10)
+		for i := range 10 {
+			go fn(i)
+			time.Sleep(1 * time.Second)
+			g.Done()
+		}
 		g.Wait()
 	})
 	assert.Nil(t, err)
