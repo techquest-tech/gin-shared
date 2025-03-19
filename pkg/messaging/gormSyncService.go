@@ -15,9 +15,10 @@ import (
 	"gorm.io/gorm"
 )
 
-var DefaultGormToipc = "scm.gorm.saved"
-
-var GormMessagingEnabled = true
+var (
+	DefaultGormToipc     = "scm.gorm.saved"
+	GormMessagingEnabled = true
+)
 
 func NewGormObjSyncService(ms MessagingService, logger *zap.Logger, db *gorm.DB) *GormObjSyncService {
 	return &GormObjSyncService{

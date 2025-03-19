@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	chSender      chan any
-	ms            MessagingService
-	AbandonedChan chan any
+	chSender            chan any
+	ms                  MessagingService
+	AbandonedChan       chan any
+	GormCallbackEnabled = true
 )
 
 func init() {
@@ -24,15 +25,18 @@ func init() {
 
 	core.ProvideStartup(func(service MessagingService, db *gorm.DB) core.Startup {
 		ms = service
-		db.Callback().Create().After("gorm:after_create").Register("messaging", messageCallbackForUpdate)
-		db.Callback().Update().After("gorm:after_update").Register("messaging", messageCallbackForUpdate)
-		db.Callback().Delete().After("gorm:delete").Register("messaging", messageCallbackForDelete)
+		if GormCallbackEnabled {
+			db.Callback().Create().After("gorm:after_create").Register("messaging", messageCallbackForUpdate)
+			db.Callback().Update().After("gorm:after_update").Register("messaging", messageCallbackForUpdate)
+			db.Callback().Delete().After("gorm:delete").Register("messaging", messageCallbackForDelete)
+		} else {
+			zap.L().Info("gorm callback is disabled.")
+		}
 
-		if GormMessagingEnabled {
+		if GormCallbackEnabled || GormMessagingEnabled {
 			chSender = make(chan any, 1000)
 			go core.AppendToFile(chSender, "gormSenderAbandoned.log")
 		}
-
 		return nil
 	})
 }
@@ -56,7 +60,7 @@ func GetPayloadID(payload any) (uint, bool) {
 }
 
 func pubGormAction(ctx context.Context, payload any, action GormAction) error {
-	if !GormMessagingEnabled {
+	if !GormCallbackEnabled {
 		return nil
 	}
 
@@ -73,7 +77,6 @@ func pubGormAction(ctx context.Context, payload any, action GormAction) error {
 
 	id, hasID := GetPayloadID(payload)
 	if hasID && id == 0 {
-
 		logger.Warn("empty ID, just skip")
 		chSender <- map[string]any{"key": key,
 			"action":    string(action),
