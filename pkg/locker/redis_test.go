@@ -145,7 +145,7 @@ func TestLockerFailed(t *testing.T) {
 
 		g := sync.WaitGroup{}
 		g.Add(10)
-		for i := range 10 {
+		for i := 0; i < 10; i++ {
 			go fn(i)
 			time.Sleep(1 * time.Second)
 			g.Done()
