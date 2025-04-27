@@ -51,7 +51,7 @@ func (ml *LocalLocker) Lock(ctx context.Context, resource string) (Release, erro
 func (ml *LocalLocker) WaitForLocker(ctx context.Context, resource string, maxWait time.Duration, timeout time.Duration) (Release, error) {
 	if timeout > 0 || maxWait > 0 {
 		// ml.ticker = timeout
-		zap.L().Warn("timeout or max wait is not supported in ram locker")
+		zap.L().Debug("timeout or max wait is not supported in ram locker")
 	}
 	return ml.Lock(ctx, resource)
 }
@@ -59,7 +59,7 @@ func (ml *LocalLocker) WaitForLocker(ctx context.Context, resource string, maxWa
 func (ml *LocalLocker) LockWithtimeout(ctx context.Context, resource string, timeout time.Duration) (Release, error) {
 	if timeout > 0 {
 		// ml.ticker = timeout
-		zap.L().Warn("timeout is not supported in ram locker")
+		zap.L().Debug("timeout is not supported in ram locker")
 	}
 	return ml.Lock(ctx, resource)
 	// logger := zap.L().With(zap.String("resources", resource))
