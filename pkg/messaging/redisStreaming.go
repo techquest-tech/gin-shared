@@ -189,15 +189,39 @@ func (msg *DefaultMessgingService) ProcessPendings(ctx context.Context, topic, g
 	}
 }
 
+func (msg *DefaultMessgingService) checkAndCreate(ctx context.Context, topic, group string) error {
+	logger := msg.Logger.With(zap.String("topic", topic))
+	// check if topic exists, if not create one
+	cmd := msg.Client.XInfoStream(ctx, topic)
+	if cmd.Err() != nil {
+		logger.Info("topic not exists, create one.", zap.Error(cmd.Err()))
+		resp := msg.Client.XAdd(ctx, &redis.XAddArgs{
+			Stream: topic,
+			Values: map[string]any{DefaultAttKey: ""},
+		})
+		if resp.Err() != nil {
+			logger.Error("create topic failed.", zap.Error(resp.Err()))
+			return resp.Err()
+		}
+		// msg.Client.XGroupSetID(ctx, topic, group, "0")
+		logger.Info("topic created")
+	}
+	err := msg.Client.XGroupCreate(ctx, topic, group, "$").Err()
+	if err != nil {
+		logger.Warn("group might be created.", zap.Error(err), zap.String("group", group))
+	}
+	return nil
+}
+
 func (msg *DefaultMessgingService) Sub(ctx context.Context, topic, group string, processor Processor) error {
 	if processor == nil {
 		return errors.New("processor is empty")
 	}
 
 	logger := msg.Logger.With(zap.String("topic", topic))
-	err := msg.Client.XGroupCreate(ctx, topic, group, "$").Err()
+	err := msg.checkAndCreate(ctx, topic, group)
 	if err != nil {
-		logger.Warn("group might be created.", zap.Error(err), zap.String("group", group))
+		return err
 	}
 
 	if lo.Contains(ResetTopics, topic) {
@@ -229,6 +253,10 @@ func (msg *DefaultMessgingService) Sub(ctx context.Context, topic, group string,
 			vv, err := cmd.Result()
 			if err != nil {
 				logger.Error("received message failed.", zap.Error(err))
+				//just in case someone else delete the topic and crash the receiver
+				go msg.checkAndCreate(ctx, topic, group)
+
+				time.Sleep(time.Second)
 				continue
 			}
 			for _, v := range vv[0].Messages {

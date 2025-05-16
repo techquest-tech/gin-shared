@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // IPWhitelistMiddleware 创建一个 IP 白名单中间件
@@ -26,6 +27,7 @@ func IPWhitelistMiddleware(whitelist []string) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"message": "Access denied",
 			})
+			zap.L().Info("bloack ip", zap.String("ip", clientIP), zap.String("resource", c.Request.URL.Path))
 			return
 		}
 
