@@ -43,6 +43,7 @@ func InitMysqlViews(tx *gorm.DB, logger *zap.Logger) error {
 	}
 
 	viewSettings := dbSettings.Sub("views")
+	errs := make([]error, 0)
 	if viewSettings != nil {
 		for _, key := range viewSettings.AllKeys() {
 			query := viewSettings.GetString(key)
@@ -54,17 +55,24 @@ func InitMysqlViews(tx *gorm.DB, logger *zap.Logger) error {
 			err := viewTpl.Execute(&out, data)
 			if err != nil {
 				logger.Error("match view template failed.", zap.Error(err))
-				return err
+				// return err
+				errs = append(errs, err)
+				continue
 			}
 
 			raw := viewSql(tablePrefix, key, out.String())
 			err = tx.Exec(raw).Error
 			if err != nil {
 				logger.Error("update view failed", zap.Error(err), zap.String("view", key))
-				return err
+				// return err
+				errs = append(errs, err)
+				continue
 			}
 			logger.Info("create view done", zap.String("view", key))
 		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("update view failed: %v", errs)
 	}
 	return nil
 }

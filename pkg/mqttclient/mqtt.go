@@ -41,7 +41,7 @@ func init() {
 
 var ll = sync.Mutex{}
 
-func (m *MqttService) Sub(topic string, handle mqtt.MessageHandler) {
+func (m *MqttService) Sub(topic string, handle mqtt.MessageHandler) error {
 	ll.Lock()
 	defer ll.Unlock()
 	if m.subs == nil {
@@ -56,8 +56,10 @@ func (m *MqttService) Sub(topic string, handle mqtt.MessageHandler) {
 	case <-token.Done():
 		err := token.Error()
 		m.Logger.Error("sub topic failed", zap.String("topic", topic), zap.Error(err))
+		return err
 	default:
 		m.Logger.Info("sub topic done", zap.String("topic", topic))
+		return nil
 	}
 
 }
