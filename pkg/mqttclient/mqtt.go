@@ -3,14 +3,18 @@ package mqttclient
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
+	"github.com/techquest-tech/gin-shared/pkg/schedule"
 	"github.com/thanhpk/randstr"
 	"go.uber.org/zap"
 )
@@ -71,9 +75,41 @@ func (m *MqttService) OnConnect(c mqtt.Client) {
 	}
 }
 
+func (m *MqttService) Pub(topic string, qos byte, retained bool, payload any) error {
+	data, _ := json.Marshal(payload)
+	token := m.Client.Publish(topic, qos, retained, data)
+	done := token.WaitTimeout(5 * time.Second)
+	if !done || token.Error() != nil {
+		m.Logger.Error("publish message failed or timeout", zap.String("topic", topic), zap.Error(token.Error()))
+		return fmt.Errorf("pub message time out or failed %s", token.Error())
+	}
+	m.Logger.Info("publish  message done", zap.String("topic", topic))
+	return nil
+}
+
 func (m *MqttService) LogMessage(c mqtt.Client, msg mqtt.Message) {
 	m.Logger.Info("received message", zap.String("ClientID", m.ClientID), zap.String("topic", msg.Topic()))
-	m.Logger.Info("message body", zap.String("msg", string(msg.Payload())))
+	m.Logger.Debug("message body", zap.String("msg", string(msg.Payload())))
+}
+
+func (m *MqttService) StartHeartbeat(serviceNmae, hbSchedule string) {
+	host, err := os.Hostname()
+	if err != nil {
+		m.Logger.Error("get hostname failed", zap.Error(err))
+		host = "unknown"
+	}
+	topic := fmt.Sprintf("summations/healthz/%s/%s/%s/%s/heartbeat", core.AppName, core.Version, serviceNmae, host)
+	topic = strings.ReplaceAll(topic, " ", "")
+
+	schedule.CreateSchedule("heartbeat-"+serviceNmae, hbSchedule, func() {
+		payload := map[string]any{
+			"timestamp": time.Now(),
+			"app":       core.AppName,
+			"version":   core.Version,
+			"module":    serviceNmae,
+		}
+		m.Pub(topic, 0, false, payload)
+	})
 }
 
 func NewMqttOptions(logger *zap.Logger) (*mqtt.ClientOptions, *MqttService, error) {
