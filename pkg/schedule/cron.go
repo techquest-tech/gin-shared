@@ -74,24 +74,38 @@ func List() []string {
 	return lo.Keys(jobs)
 }
 
-func CreateSchedule(jobname, schedule string, cmd func()) error {
+type ScheduleOptions struct {
+	Nolocker  bool
+	NoGlobal  bool // ignore ScheduleDisabled
+	NoHistory bool
+}
+
+func CreateSchedule(jobname, schedule string, cmd func(), opts ...ScheduleOptions) error {
 	jobs[jobname] = cmd
 
 	err := core.GetContainer().Invoke(func(p JobParams, pp core.OptionalParam[locker.Locker]) error {
-		if ScheduleDisabled {
+		opt := &ScheduleOptions{}
+		if len(opts) > 0 {
+			opt = &opts[0]
+		}
+		if ScheduleDisabled && !opt.NoGlobal {
 			p.Logger.Info("cronjob is disabled.", zap.String("job", jobname))
 			return nil
 		}
 		l := &CronZaplog{
 			logger: p.Logger,
 		}
-		opts := []cron.JobWrapper{cron.Recover(l), cron.SkipIfStillRunning(l), CheckIfEnabled()}
+		opts := []cron.JobWrapper{cron.Recover(l), cron.SkipIfStillRunning(l)}
 
-		if JobHistoryEnabled && p.Bus != nil {
+		if !opt.NoGlobal {
+			opts = append(opts, CheckIfEnabled())
+		}
+
+		if JobHistoryEnabled && p.Bus != nil && !opt.NoHistory {
 			opts = append(opts, Withhistory(jobname))
 		}
 
-		if ScheduleLockerEnabled && pp.P != nil {
+		if ScheduleLockerEnabled && pp.P != nil && !opt.Nolocker {
 			locker := &ScheduleLoker{
 				Locker:  pp.P,
 				Bus:     p.Bus,

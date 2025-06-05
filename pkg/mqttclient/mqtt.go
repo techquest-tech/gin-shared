@@ -109,6 +109,10 @@ func (m *MqttService) StartHeartbeat(serviceNmae, hbSchedule string) {
 			"module":    serviceNmae,
 		}
 		m.Pub(topic, 0, false, payload)
+	}, schedule.ScheduleOptions{
+		Nolocker:  true,
+		NoGlobal:  true,
+		NoHistory: true,
 	})
 }
 
