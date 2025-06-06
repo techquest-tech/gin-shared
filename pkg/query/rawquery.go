@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 
@@ -9,7 +10,9 @@ import (
 	"gorm.io/gorm"
 )
 
-const KeyWhere = "{{.where}}"
+const (
+	KeyWhere = "{{.where}}"
+)
 
 // it's not enabled yet.
 type RawQueryWhere struct {
@@ -25,8 +28,6 @@ type RawQuery struct {
 	Where   map[string]string // key: where condition, value: param key, e.g. "id = ?", "id"
 	Orderby string
 	Groupby string
-	Limit   int
-	Offset  int
 }
 
 func (r *RawQuery) Query(db *gorm.DB, data map[string]any) ([]map[string]any, error) {
@@ -38,12 +39,9 @@ func Query[T any](db *gorm.DB, r *RawQuery, data map[string]any) ([]T, error) {
 
 	sql := r.Sql
 
-	for k, v := range r.Preset {
-		allParams[k] = v
-	}
-	for k, v := range data {
-		allParams[k] = v
-	}
+	maps.Copy(allParams, r.Preset)
+	maps.Copy(allParams, data)
+
 	params := make([]any, 0)
 	for _, key := range r.Params {
 		params = append(params, allParams[key])
@@ -51,7 +49,7 @@ func Query[T any](db *gorm.DB, r *RawQuery, data map[string]any) ([]T, error) {
 
 	if len(r.Where) > 0 {
 		conds := make([]string, 0)
-		for cond, p := range r.Where {
+		for p, cond := range r.Where {
 			if v, ok := allParams[p]; ok {
 				if s, ok := v.(string); ok {
 					ss := strings.TrimSpace(s)
@@ -91,28 +89,22 @@ func Query[T any](db *gorm.DB, r *RawQuery, data map[string]any) ([]T, error) {
 		sql = fmt.Sprintf("%s order by %s", sql, orderby)
 	}
 
-	limit := r.Limit
-	if l, ok := data["limit"]; ok {
-		ll, err := strconv.Atoi(l.(string))
-		if err != nil {
-			zap.L().Warn("invalid limit", zap.Error(err), zap.String("limit", l.(string)))
-		} else {
-			limit = ll
-		}
+	limit := toInt(data, "limit")
+
+	page := toInt(data, "page")
+	pageSize := toInt(data, "page_size")
+
+	if limit == 0 && pageSize > 0 {
+		limit = pageSize
 	}
 
 	if limit > 0 {
 		sql = fmt.Sprintf("%s limit %d", sql, limit)
 	}
 
-	offset := r.Offset
-	if o, ok := data["offset"]; ok {
-		oo, err := strconv.Atoi(o.(string))
-		if err != nil {
-			zap.L().Warn("invalid offset", zap.Error(err), zap.String("offset", o.(string)))
-		} else {
-			offset = oo
-		}
+	offset := toInt(data, "offset")
+	if offset == 0 && page > 0 && pageSize > 0 {
+		offset = page * pageSize
 	}
 	if offset > 0 {
 		sql = fmt.Sprintf("%s offset %d", sql, offset)
@@ -125,4 +117,16 @@ func Query[T any](db *gorm.DB, r *RawQuery, data map[string]any) ([]T, error) {
 	err := tx.Find(&result).Error
 
 	return result, err
+}
+
+func toInt(data map[string]any, key string) int {
+	if v, ok := data[key]; ok {
+		if i, ok := v.(int); ok {
+			return i
+		}
+		if i, err := strconv.Atoi(v.(string)); err == nil {
+			return i
+		}
+	}
+	return 0
 }
