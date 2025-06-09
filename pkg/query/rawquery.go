@@ -66,18 +66,20 @@ func (r *RawQuery) PagingResult(db *gorm.DB, result []map[string]any, req map[st
 		Page:     page,
 		PageSize: pageSize,
 		Data:     result,
-		Total:    int64(len(result)),
+	}
+	if page == 0 {
+		if len(result) == 0 {
+			// resp.TotalPage = 0
+			return resp, nil
+		}
+
+		if len(result) < pageSize {
+			resp.Total = int64(len(result))
+			resp.TotalPage = 1
+			return resp, nil
+		}
 	}
 
-	if len(result) == 0 {
-		resp.TotalPage = 0
-		return resp, nil
-	}
-
-	if len(result) < pageSize {
-		resp.TotalPage = 1
-		return resp, nil
-	}
 	total, err := r.sum(db, req)
 	if err != nil {
 		return nil, err
@@ -85,6 +87,7 @@ func (r *RawQuery) PagingResult(db *gorm.DB, result []map[string]any, req map[st
 	pageTotal := (total + int64(pageSize-1)) / int64(pageSize)
 
 	resp.TotalPage = pageTotal
+	resp.Total = total
 	return resp, nil
 }
 
@@ -136,9 +139,7 @@ func (r *RawQuery) sum(db *gorm.DB, data map[string]any) (int64, error) {
 	for _, key := range r.Params {
 		params = append(params, allParams[key])
 	}
-	// sql := r.SumSql
-	// if sql == "" {
-	// start:=strings.Index(r.Sql, "select ")
+
 	end := strings.Index(r.Sql, "from")
 	sql := "select count(1) as sum " + r.Sql[end:]
 	if len(r.Where) > 0 {
@@ -147,30 +148,7 @@ func (r *RawQuery) sum(db *gorm.DB, data map[string]any) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
-		// conds := make([]string, 0)
-		// for p, cond := range r.Where {
-		// 	if v, ok := allParams[p]; ok {
-		// 		if s, ok := v.(string); ok {
-		// 			ss := strings.TrimSpace(s)
-		// 			if ss == "" || ss == "null" || ss == "-" || ss == "none" {
-		// 				zap.L().Debug("empty value ", zap.String("param", p))
-		// 				continue
-		// 			}
-		// 		}
-		// 		conds = append(conds, cond)
-		// 		params = append(params, v)
-		// 	}
-		// }
-		// if len(conds) > 0 {
-		// 	conds := strings.Join(conds, " and ")
-		// 	if strings.Contains(sql, KeyWhere) {
-		// 		sql = strings.Replace(sql, KeyWhere, conds, 1)
-		// 	} else {
-		// 		sql = sql + " where " + conds
-		// 	}
-		// }
 	}
-	// }
 
 	count := int64(0)
 	tx := db.Raw(sql, params...)
@@ -201,28 +179,13 @@ func Query[T any](db *gorm.DB, r *RawQuery, data map[string]any) ([]T, error) {
 		if err != nil {
 			return nil, err
 		}
-		// conds := make([]string, 0)
-		// for p, cond := range r.Where {
-		// 	if v, ok := allParams[p]; ok {
-		// 		if s, ok := v.(string); ok {
-		// 			ss := strings.TrimSpace(s)
-		// 			if ss == "" || ss == "null" || ss == "-" || ss == "none" {
-		// 				zap.L().Debug("empty value ", zap.String("param", p))
-		// 				continue
-		// 			}
-		// 		}
-		// 		conds = append(conds, cond)
-		// 		params = append(params, v)
-		// 	}
-		// }
-		// if len(conds) > 0 {
-		// 	conds := strings.Join(conds, " and ")
-		// 	if strings.Contains(sql, KeyWhere) {
-		// 		sql = strings.Replace(sql, KeyWhere, conds, 1)
-		// 	} else {
-		// 		sql = sql + " where " + conds
-		// 	}
-		// }
+	}
+
+	page := toInt(data, "page")
+	pageSize := toInt(data, "page_size")
+
+	if r.ShouldPagingResult() && pageSize == 0 {
+		pageSize = PageSize
 	}
 
 	groupby := r.Groupby
@@ -243,9 +206,6 @@ func Query[T any](db *gorm.DB, r *RawQuery, data map[string]any) ([]T, error) {
 	}
 
 	limit := toInt(data, "limit")
-
-	page := toInt(data, "page")
-	pageSize := toInt(data, "page_size")
 
 	if limit == 0 && pageSize > 0 {
 		limit = pageSize
