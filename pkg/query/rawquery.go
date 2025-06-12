@@ -12,7 +12,9 @@ import (
 )
 
 const (
-	KeyWhere = "{{.where}}"
+	KeyWhere    = "{{.where}}"
+	KeyPageSize = "page_size"
+	KeyPage     = "page"
 )
 
 type PagingResult[T any] struct {
@@ -51,13 +53,15 @@ func (r *RawQuery) Query(db *gorm.DB, data map[string]any) ([]map[string]any, er
 }
 
 // check should return Paging Result
-func (r *RawQuery) ShouldPagingResult() bool {
-	return r.SumRef != "" || r.SumEnabled
+func (r *RawQuery) ShouldPagingResult(req map[string]any) bool {
+	pageSize := toInt(req, KeyPageSize)
+	_, ok := req["export"]
+	return (r.SumRef != "" || r.SumEnabled) && pageSize != -1 && !ok
 }
 
 func (r *RawQuery) PagingResult(db *gorm.DB, result []map[string]any, req map[string]any) (*PagingResult[map[string]any], error) {
-	pageSize := toInt(req, "page_size")
-	page := toInt(req, "page")
+	pageSize := toInt(req, KeyPageSize)
+	page := toInt(req, KeyPage)
 	if pageSize == 0 {
 		pageSize = PageSize
 	}
@@ -181,10 +185,10 @@ func Query[T any](db *gorm.DB, r *RawQuery, data map[string]any) ([]T, error) {
 		}
 	}
 
-	page := toInt(data, "page")
-	pageSize := toInt(data, "page_size")
+	page := toInt(data, KeyPage)
+	pageSize := toInt(data, KeyPageSize)
 
-	if r.ShouldPagingResult() && pageSize == 0 {
+	if r.ShouldPagingResult(allParams) && pageSize == 0 {
 		pageSize = PageSize
 	}
 
