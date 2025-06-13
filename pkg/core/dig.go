@@ -65,3 +65,8 @@ func GetService[T any]() T {
 	}
 	return result
 }
+
+type Startups struct {
+	dig.In
+	Startups []Startup `group:"startups"`
+}

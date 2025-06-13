@@ -17,7 +17,7 @@ import (
 
 var (
 	DefaultGormToipc     = "scm.gorm.saved"
-	GormMessagingEnabled = true
+	GormMessagingEnabled = false // found it impact the gorm(cause gorm failed without any warning or error), so disabled before fixed.
 )
 
 func NewGormObjSyncService(ms MessagingService, logger *zap.Logger, db *gorm.DB) *GormObjSyncService {

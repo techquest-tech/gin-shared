@@ -7,20 +7,16 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/schedule"
-	"go.uber.org/dig"
 )
 
-type Schedule struct {
-	dig.In
-	Startups []core.Startup `group:"startups"`
-}
+// type Schedule core.Startups
 
 func ScheduleLikeCmd(cmdUse, cmdShort string) *cobra.Command {
 	return &cobra.Command{
 		Use:   cmdUse,
 		Short: cmdShort,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return core.GetContainer().Invoke(func(p Schedule) error {
+			return core.GetContainer().Invoke(func(p core.Startups) error {
 				core.NotifyStarted()
 				CloseOnlyNotified()
 				core.NotifyStopping()
@@ -49,7 +45,7 @@ var RunJobCmd = &cobra.Command{
 	Use:   "job",
 	Short: "run job now",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return core.GetContainer().Invoke(func(p Schedule) error {
+		return core.GetContainer().Invoke(func(p core.Startups) error {
 			if len(args) == 0 {
 				keys := schedule.List()
 				println("available jobs:")
