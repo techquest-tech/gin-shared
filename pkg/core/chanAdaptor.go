@@ -2,6 +2,7 @@ package core
 
 import (
 	"sync"
+	"time"
 
 	"github.com/thanhpk/randstr"
 	"go.uber.org/zap"
@@ -87,6 +88,8 @@ func (ca *ChanAdaptor[T]) Start() {
 	ca.Started = true
 	OnServiceStopping(func() {
 		close(ca.sender)
+		zap.L().Info("chanAdaptor stopped")
+		time.Sleep(GraceShutdown)
 	})
 	for v := range ca.sender {
 		for _, c := range ca.receivers {
