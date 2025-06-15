@@ -176,3 +176,16 @@ func MD5(raw []byte) string {
 	signed := hex.EncodeToString(h.Sum(nil))
 	return signed
 }
+
+func ToAnyChan[T any](input chan T) chan any {
+	output := make(chan any)
+	go func() {
+		for val := range input {
+			output <- val
+		}
+	}()
+	OnServiceStopping(func() {
+		close(output)
+	})
+	return output
+}

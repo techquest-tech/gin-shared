@@ -31,26 +31,26 @@ func init() {
 }
 
 // PersistEvent is the interface that defines the callback functions for parquet persistence.
-type PersistEvent[T any] interface {
-	OnPersistFailed(data []T, err error)
-	OnPersistDone(data []T, filename string)
+type PersistEvent interface {
+	OnPersistFailed(data []any, err error)
+	OnPersistDone(data []any, filename string)
 }
 
-type DefaultPersistEvent[T any] struct {
+type DefaultPersistEvent struct {
 }
 
-func (d *DefaultPersistEvent[T]) OnPersistFailed(data []T, failed error) {
+func (d *DefaultPersistEvent) OnPersistFailed(data []any, failed error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		panic("persist failed, and  marshal failed." + failed.Error())
 	}
 	payload := fmt.Sprintf("{\"error\":\"%s\",\"data\":%s}", failed.Error(), string(jsonData))
 
-	filename := filepath.Join(Folder4FailedMsgs, time.Now().Format(time.RFC3339)+".json")
+	filename := filepath.Join(Folder4FailedMsgs, time.Now().Format("20060102T150405.json"))
 	os.WriteFile(filename, []byte(payload), 0644)
 	zap.L().Info("wrote failed to file done", zap.String("filename", filename))
 }
 
-func (d *DefaultPersistEvent[T]) OnPersistDone(data []T, filename string) {
+func (d *DefaultPersistEvent) OnPersistDone(data []any, filename string) {
 	zap.L().Info("wrote to file done", zap.String("filename", filename))
 }

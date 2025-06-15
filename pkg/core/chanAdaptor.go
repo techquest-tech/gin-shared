@@ -92,8 +92,9 @@ func (ca *ChanAdaptor[T]) Start() {
 		time.Sleep(GraceShutdown)
 	})
 	for v := range ca.sender {
-		for _, c := range ca.receivers {
+		for receiver, c := range ca.receivers {
 			c <- v
+			zap.L().Debug("chanAdaptor fwd message", zap.String("receiver", receiver))
 		}
 	}
 
