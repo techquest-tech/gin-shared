@@ -42,6 +42,7 @@ type OssEventService struct {
 	Secret    string
 	Bucket    string
 	Prefix    string // prefix for object key
+	Cleanup   bool
 	ToOssFile func(filename string) string
 	client    *oss.Client
 }
@@ -98,11 +99,13 @@ func (d *OssEventService) OnPersistDone(data []any, filename string) {
 	}
 
 	logger.Info("File uploaded to OSS", zap.String("objectKey", objectKey))
-	// delete file after uploaded
-	err = os.Remove(filename)
-	if err != nil {
-		logger.Warn("clean up file failed.", zap.Error(err))
-		return
+	if d.Cleanup {
+		// delete file after uploaded
+		err = os.Remove(filename)
+		if err != nil {
+			logger.Warn("clean up file failed.", zap.Error(err))
+			return
+		}
+		logger.Info("clean up file done.")
 	}
-	logger.Info("clean up file done.")
 }
