@@ -37,6 +37,7 @@ type PersistEvent interface {
 }
 
 type DefaultPersistEvent struct {
+	Folder string
 }
 
 func (d *DefaultPersistEvent) OnPersistFailed(data []any, failed error) {
@@ -44,10 +45,17 @@ func (d *DefaultPersistEvent) OnPersistFailed(data []any, failed error) {
 	if err != nil {
 		panic("persist failed, and  marshal failed." + failed.Error())
 	}
+	if d.Folder == "" {
+		d.Folder = Folder4FailedMsgs
+	}
 	payload := fmt.Sprintf("{\"error\":\"%s\",\"data\":%s}", failed.Error(), string(jsonData))
 
-	filename := filepath.Join(Folder4FailedMsgs, time.Now().Format("20060102T150405.json"))
-	os.WriteFile(filename, []byte(payload), 0644)
+	filename := filepath.Join(d.Folder, time.Now().Format("20060102T150405.json"))
+	err = os.WriteFile(filename, []byte(payload), 0644)
+	if err != nil {
+		zap.L().Error("write file failed", zap.Error(err), zap.String("file", filename), zap.String("payload", payload))
+		return
+	}
 	zap.L().Info("wrote failed to file done", zap.String("filename", filename))
 }
 

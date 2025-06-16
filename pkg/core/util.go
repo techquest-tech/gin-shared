@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -188,4 +189,27 @@ func ToAnyChan[T any](input chan T) chan any {
 		close(output)
 	})
 	return output
+}
+
+func GetStructNameOnly[T any](rr T) string {
+	// get the struct name without package
+
+	tname := fmt.Sprintf("%T", rr)
+
+	from := strings.LastIndexByte(tname, '.')
+	from2 := strings.LastIndexByte(tname, '[')
+
+	if from < from2 {
+		from = from2
+	}
+
+	if from > 0 {
+		from = from + 1
+	}
+	to := strings.LastIndexByte(tname, ']')
+	if to == -1 {
+		to = len(tname)
+	}
+
+	return tname[from:to]
 }

@@ -7,34 +7,31 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/jinzhu/copier"
 	"github.com/parquet-go/parquet-go"
 	"github.com/samber/lo"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/messaging"
-
-	// "github.com/xitongsys/parquet-go/schema"
-	// "github.com/xitongsys/parquet-go-source/local"
-	// "github.com/xitongsys/parquet-go/parquet"
-	// "github.com/xitongsys/parquet-go/schema"
-	// "github.com/xitongsys/parquet-go/writer"
+	"github.com/thanhpk/randstr"
 	"go.uber.org/zap"
 )
 
 type ParquetSetting struct {
-	Folder     string
-	Filename   string
-	BufferSize int // settings for batch
-	BufferDur  time.Duration
-	Compress   string // should enabled compress
+	Folder          string
+	FilenamePattern string
+	BufferSize      int // settings for batch
+	BufferDur       time.Duration
+	Compress        string // should enabled compress
 	// Processor  string
 }
 
 func DefaultParquetSetting() *ParquetSetting {
 	return &ParquetSetting{
-		Folder:     "data",
-		Filename:   "chunk_20060102T150405",
-		BufferSize: 10 * 1000,
-		BufferDur:  time.Second * 30,
-		Compress:   "GZIP",
+		Folder:          "data",
+		FilenamePattern: "chunk_20060102T150405",
+		BufferSize:      10 * 1000,
+		BufferDur:       time.Second * 30,
+		Compress:        "GZIP",
 	}
 }
 
@@ -54,6 +51,21 @@ func NewParquetDataServiceBySchema(setting *ParquetSetting, ss *parquet.Schema, 
 	}
 }
 
+func NewParquetDataServiceT[T any](settings *ParquetSetting, filenamePattern string, c chan T) *ParquetDataService {
+	clonedSettings := &ParquetSetting{}
+
+	copier.CopyWithOption(clonedSettings, settings, copier.Option{IgnoreEmpty: true, DeepCopy: true})
+	var data T
+
+	clonedSettings.FilenamePattern = fmt.Sprintf(filenamePattern, core.GetStructNameOnly(data))
+
+	return &ParquetDataService{
+		Setting: clonedSettings,
+		Raw:     core.ToAnyChan(c),
+		Schema:  parquet.SchemaOf(data),
+	}
+}
+
 type ParquetDataService struct {
 	Setting *ParquetSetting
 	Schema  *parquet.Schema
@@ -65,8 +77,9 @@ type ParquetDataService struct {
 // 生成文件名
 func generateFileName(folder, timestampformt string) (string, error) {
 	timestamp := time.Now().Format(timestampformt)
-	// safeTopic := strings.ReplaceAll(topic, "/", "_") // 替换斜杠为下划线
-	result := fmt.Sprintf("%s/%s.parquet", folder, timestamp)
+
+	sand := randstr.Hex(4) // just incase any concurrent write to same file
+	result := fmt.Sprintf("%s/%s_%s.parquet", folder, timestamp, sand)
 
 	// 获取文件所在的目录
 	dir := filepath.Dir(result)
@@ -88,7 +101,7 @@ func generateFileName(folder, timestampformt string) (string, error) {
 func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
 	logger := zap.L()
 
-	filename, err := generateFileName(p.Setting.Folder, p.Setting.Filename)
+	filename, err := generateFileName(p.Setting.Folder, p.Setting.FilenamePattern)
 	if err != nil {
 		logger.Error("generate file name failed.", zap.Error(err))
 		return "", err
