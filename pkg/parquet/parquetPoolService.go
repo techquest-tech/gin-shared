@@ -126,10 +126,10 @@ func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
 }
 
 func (p *ParquetDataService) Start(ctx context.Context) error {
-	logger := zap.L().With(zap.String("service", "parquet-data-service"))
+	logger := zap.L().With(zap.String("service", "parquet-data-service"), zap.String("schema", p.Schema.GoType().Name()))
 
 	if p.Setting.BufferDur == 0 {
-		p.Setting.BufferDur = 10 * time.Second
+		p.Setting.BufferDur = time.Minute
 	}
 	if p.Setting.BufferSize == 0 {
 		p.Setting.BufferSize = 1000

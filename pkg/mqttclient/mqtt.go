@@ -39,9 +39,9 @@ type MqttService struct {
 	Client        mqtt.Client
 }
 
-func init() {
-	core.GetContainer().Provide(InitMqtt)
-}
+// func init() {
+// 	core.GetContainer().Provide(InitMqtt)
+// }
 
 var ll = sync.Mutex{}
 
@@ -115,23 +115,17 @@ func (m *MqttService) StartHeartbeat(serviceNmae, hbSchedule string) {
 	})
 }
 
-func NewMqttOptions(logger *zap.Logger) (*mqtt.ClientOptions, *MqttService, error) {
-	broke := &MqttService{
-		Endpoint:      "tcp://127.0.0.1:1883",
-		Logger:        logger,
-		Qos:           1,
-		AutoReconnect: true,
-		subs:          make(map[string]mqtt.MessageHandler),
+func NewMQTTClient(logger *zap.Logger, broke *MqttService, subKey string) (*MqttService, error) {
+	if broke.subs == nil {
+		broke.subs = make(map[string]mqtt.MessageHandler)
 	}
-
-	settings := viper.Sub("mqtt")
-	if settings != nil {
-		settings.Unmarshal(broke)
+	err := viper.UnmarshalKey(subKey, broke)
+	if err != nil {
+		return nil, err
 	}
 
 	if broke.ClientID == "" {
 		broke.ClientID = strings.ReplaceAll(core.AppName, " ", "_") + randstr.Hex(16)
-		broke.Cleansession = true
 		logger.Warn("MQTT clientID is empty, use UUID as clientID")
 	} else {
 		if strings.Contains(broke.ClientID, "{{.hostname}}") {
@@ -163,7 +157,7 @@ func NewMqttOptions(logger *zap.Logger) (*mqtt.ClientOptions, *MqttService, erro
 			caCert, err := os.ReadFile(broke.TlsConfig.Ca)
 			if err != nil {
 				logger.Error("load ca cert failed", zap.Error(err))
-				return nil, nil, err
+				return nil, err
 			}
 			caCertPool := x509.NewCertPool()
 			caCertPool.AppendCertsFromPEM(caCert)
@@ -171,11 +165,12 @@ func NewMqttOptions(logger *zap.Logger) (*mqtt.ClientOptions, *MqttService, erro
 		}
 
 		if broke.TlsConfig.Cert != "" && broke.TlsConfig.Key != "" {
+
 			// load client cert
 			cert, err := tls.LoadX509KeyPair(broke.TlsConfig.Cert, broke.TlsConfig.Key)
 			if err != nil {
 				logger.Error("load client cert failed", zap.Error(err))
-				return nil, nil, err
+				return nil, err
 			}
 			tlsConfig.Certificates = []tls.Certificate{cert}
 		}
@@ -187,14 +182,7 @@ func NewMqttOptions(logger *zap.Logger) (*mqtt.ClientOptions, *MqttService, erro
 		opts.Username = broke.User
 		opts.Password = broke.Password
 	}
-	return opts, broke, nil
-}
 
-func InitMqtt(logger *zap.Logger) (*MqttService, error) {
-	opts, broke, err := NewMqttOptions(logger)
-	if err != nil {
-		return nil, err
-	}
 	opts.OnConnectionLost = func(c mqtt.Client, err error) {
 		logger.Error("connection lost", zap.Error(err))
 	}
@@ -218,4 +206,14 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 		logger.Info("mqtt client stopped")
 	})
 	return broke, nil
+}
+
+func InitMqtt(logger *zap.Logger) (*MqttService, error) {
+	return NewMQTTClient(logger, &MqttService{
+		Endpoint:      "tcp://127.0.0.1:1883",
+		Logger:        logger,
+		Qos:           1,
+		Cleansession:  true,
+		AutoReconnect: true,
+	}, "mqtt")
 }

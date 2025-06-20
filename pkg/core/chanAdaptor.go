@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/samber/lo"
 	"github.com/thanhpk/randstr"
 	"go.uber.org/zap"
 )
@@ -102,6 +103,10 @@ func (ca *ChanAdaptor[T]) Start() {
 		close(c)
 	}
 	zap.L().Info("chanAdaptor and receivers were stopped.")
+}
+
+func (ca *ChanAdaptor[T]) Receivers() []string {
+	return lo.Keys(ca.receivers)
 }
 
 type ErrorReport struct {
