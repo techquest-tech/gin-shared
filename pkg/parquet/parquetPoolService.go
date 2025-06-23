@@ -116,7 +116,14 @@ func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
 			}
 		}
 	}()
-	err = parquet.WriteFile(filename, msgs, p.Schema)
+	options := []parquet.WriterOption{
+		p.Schema,
+	}
+
+	if p.Setting.Compress != "" {
+		options = append(options, parquet.Compression(p.Schema.Compression()))
+	}
+	err = parquet.WriteFile(filename, msgs, options...)
 	if err != nil {
 		zap.L().Error("failed to write parquet file", zap.Error(err))
 		return "", err
