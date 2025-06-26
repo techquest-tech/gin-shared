@@ -2,7 +2,9 @@ package core
 
 import (
 	"sync"
+	"time"
 
+	"github.com/samber/lo"
 	"github.com/thanhpk/randstr"
 	"go.uber.org/zap"
 )
@@ -87,10 +89,13 @@ func (ca *ChanAdaptor[T]) Start() {
 	ca.Started = true
 	OnServiceStopping(func() {
 		close(ca.sender)
+		zap.L().Info("chanAdaptor stopped")
+		time.Sleep(GraceShutdown)
 	})
 	for v := range ca.sender {
-		for _, c := range ca.receivers {
+		for receiver, c := range ca.receivers {
 			c <- v
+			zap.L().Debug("chanAdaptor fwd message", zap.String("receiver", receiver))
 		}
 	}
 
@@ -98,6 +103,10 @@ func (ca *ChanAdaptor[T]) Start() {
 		close(c)
 	}
 	zap.L().Info("chanAdaptor and receivers were stopped.")
+}
+
+func (ca *ChanAdaptor[T]) Receivers() []string {
+	return lo.Keys(ca.receivers)
 }
 
 type ErrorReport struct {

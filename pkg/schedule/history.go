@@ -23,7 +23,7 @@ const (
 	EventJobFailed   = "event.job.failed"
 )
 
-var JobHistoryAdaptor = core.NewChanAdaptor[*JobHistory](1000)
+var JobHistoryAdaptor = core.NewChanAdaptor[JobHistory](1000)
 
 type JobHistory struct {
 	Job      string
@@ -63,7 +63,7 @@ func (p *JobHistoryProvider) GetLastDoneJobHistory(jobname string) *JobHistory {
 
 	return nil
 }
-func (p *JobHistoryProvider) SetJobhistory(h *JobHistory) {
+func (p *JobHistoryProvider) SetJobhistory(h JobHistory) {
 	// if p.Bus != nil {
 	// 	p.Bus.Publish(EventJobFinished, h)
 	// }
@@ -102,7 +102,7 @@ func Withhistory(jobname string) cron.JobWrapper {
 			func() {
 				logger := zap.L().With(zap.String("jobname", jobname))
 				logger.Debug("mark job started")
-				task := &JobHistory{
+				task := JobHistory{
 					Job:     jobname,
 					Start:   time.Now(),
 					Succeed: true,

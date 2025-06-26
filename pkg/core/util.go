@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -175,4 +176,40 @@ func MD5(raw []byte) string {
 	h.Write(raw)
 	signed := hex.EncodeToString(h.Sum(nil))
 	return signed
+}
+
+func ToAnyChan[T any](input chan T) chan any {
+	output := make(chan any)
+	go func() {
+		for val := range input {
+			output <- val
+		}
+	}()
+	OnServiceStopping(func() {
+		close(output)
+	})
+	return output
+}
+
+func GetStructNameOnly[T any](rr T) string {
+	// get the struct name without package
+
+	tname := fmt.Sprintf("%T", rr)
+
+	from := strings.LastIndexByte(tname, '.')
+	from2 := strings.LastIndexByte(tname, '[')
+
+	if from < from2 {
+		from = from2
+	}
+
+	if from > 0 {
+		from = from + 1
+	}
+	to := strings.LastIndexByte(tname, ']')
+	if to == -1 {
+		to = len(tname)
+	}
+
+	return tname[from:to]
 }

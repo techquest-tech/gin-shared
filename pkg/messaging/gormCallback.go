@@ -15,7 +15,7 @@ var (
 	chSender            chan any
 	ms                  MessagingService
 	AbandonedChan       chan any
-	GormCallbackEnabled = true
+	GormCallbackEnabled = false
 )
 
 func init() {
@@ -23,22 +23,27 @@ func init() {
 	AbandonedChan = make(chan any)
 	go core.AppendToFile(AbandonedChan, "receivedAbandoned.log")
 
-	core.ProvideStartup(func(service MessagingService, db *gorm.DB) core.Startup {
-		ms = service
-		if GormCallbackEnabled {
+	if GormCallbackEnabled {
+		core.ProvideStartup(func(service MessagingService, db *gorm.DB) core.Startup {
+			ms = service
+			// if GormCallbackEnabled {
 			db.Callback().Create().After("gorm:after_create").Register("messaging", messageCallbackForUpdate)
 			db.Callback().Update().After("gorm:after_update").Register("messaging", messageCallbackForUpdate)
 			db.Callback().Delete().After("gorm:delete").Register("messaging", messageCallbackForDelete)
-		} else {
-			zap.L().Info("gorm callback is disabled.")
-		}
+			// } else {
+			// zap.L().Info("gorm callback is disabled.")
+			// }
 
-		if GormCallbackEnabled || GormMessagingEnabled {
-			chSender = make(chan any, 1000)
-			go core.AppendToFile(chSender, "gormSenderAbandoned.log")
-		}
-		return nil
-	})
+			if GormCallbackEnabled || GormMessagingEnabled {
+				chSender = make(chan any, 1000)
+				go core.AppendToFile(chSender, "gormSenderAbandoned.log")
+			}
+			return nil
+		})
+	} else {
+		zap.L().Info("gorm callback is disabled.")
+	}
+
 }
 
 // try to get payload ID value as uint, return false if payload doesn't have ID field
