@@ -36,7 +36,7 @@ func NewOssEventService(logger *zap.Logger) (PersistEvent, error) {
 }
 
 type OssEventService struct {
-	PersistEvent
+	DefaultPersistEvent
 	Endpoint  string
 	ID        string
 	Secret    string

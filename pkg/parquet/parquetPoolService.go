@@ -22,6 +22,7 @@ type ParquetSetting struct {
 	BufferSize      int // settings for batch
 	BufferDur       time.Duration
 	Compress        string // should enabled compress
+	Ackfile         bool   // should generate ack file.
 	// Processor  string
 }
 
@@ -59,10 +60,15 @@ func NewParquetDataServiceT[T any](settings *ParquetSetting, filenamePattern str
 
 	clonedSettings.FilenamePattern = fmt.Sprintf(filenamePattern, core.GetStructNameOnly(data))
 
+	defaultEvent := &DefaultPersistEvent{
+		Ackfile: settings.Ackfile,
+	}
+
 	return &ParquetDataService{
 		Setting: clonedSettings,
 		Raw:     core.ToAnyChan(c),
 		Schema:  parquet.SchemaOf(data),
+		Event:   defaultEvent,
 	}
 }
 

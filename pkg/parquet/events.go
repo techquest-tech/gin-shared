@@ -13,6 +13,7 @@ import (
 
 var (
 	Folder4FailedMsgs = "./data/.error"
+	AckExt            = ".ack"
 )
 
 func init() {
@@ -37,7 +38,8 @@ type PersistEvent interface {
 }
 
 type DefaultPersistEvent struct {
-	Folder string
+	Folder  string
+	Ackfile bool
 }
 
 func (d *DefaultPersistEvent) OnPersistFailed(data []any, failed error) {
@@ -61,4 +63,9 @@ func (d *DefaultPersistEvent) OnPersistFailed(data []any, failed error) {
 
 func (d *DefaultPersistEvent) OnPersistDone(data []any, filename string) {
 	zap.L().Info("wrote to file done", zap.String("filename", filename))
+	// check if should generate ack file, for file base event trigger.
+	if d.Ackfile {
+		ackfile := filename + AckExt
+		os.WriteFile(ackfile, []byte(""), 0644)
+	}
 }
