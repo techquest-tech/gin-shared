@@ -113,6 +113,7 @@ type ErrorReport struct {
 	Uri       string
 	FullStack []byte
 	Error     error
+	HappendAT time.Time
 }
 
 var ErrorAdaptor = NewChanAdaptor[ErrorReport](1000) // error adaptor for monitor error.

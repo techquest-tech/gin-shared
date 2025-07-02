@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/spf13/viper"
@@ -64,8 +65,9 @@ func (d *OssEventService) OnPersistDone(data []any, filename string) {
 	if err != nil {
 		// return err
 		core.ErrorAdaptor.Push(core.ErrorReport{
-			Error: fmt.Errorf("failed to get bucket %s: %v", d.Bucket, err),
-			Uri:   filename,
+			Error:     fmt.Errorf("failed to get bucket %s: %v", d.Bucket, err),
+			Uri:       filename,
+			HappendAT: time.Now(),
 		})
 		return
 	}
@@ -73,8 +75,9 @@ func (d *OssEventService) OnPersistDone(data []any, filename string) {
 	_, err = os.Stat(filename)
 	if err != nil {
 		core.ErrorAdaptor.Push(core.ErrorReport{
-			Error: fmt.Errorf("failed to get file info %s: %v", filename, err),
-			Uri:   filename,
+			Error:     fmt.Errorf("failed to get file info %s: %v", filename, err),
+			Uri:       filename,
+			HappendAT: time.Now(),
 		})
 		return
 	}

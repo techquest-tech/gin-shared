@@ -3,6 +3,7 @@ package ginshared
 import (
 	"fmt"
 	"runtime"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/techquest-tech/gin-shared/pkg/core"
@@ -55,6 +56,7 @@ func (handle *ReportError) Middleware(c *gin.Context) {
 				Error:     e,
 				FullStack: buffer[:n],
 				Uri:       c.Request.RequestURI,
+				HappendAT: time.Now(),
 			})
 			// if core.Bus != nil {
 			// 	core.Bus.Publish(core.EventError, err)
