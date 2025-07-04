@@ -38,6 +38,7 @@ type RawQueryWhere struct {
 }
 
 type RawQuery struct {
+	Connection string // which connection should be used for query.
 	Sql        string
 	SumRef     string // reference to another RawQuery define, not used yet.
 	SumEnabled bool

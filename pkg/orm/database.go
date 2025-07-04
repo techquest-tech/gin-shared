@@ -25,7 +25,10 @@ const (
 
 type OrmDialector func(dsn string) gorm.Dialector
 
-var DialectorMap = make(map[string]OrmDialector)
+var (
+	DialectorMap = make(map[string]OrmDialector)
+	Connections  = make(map[string]*gorm.DB)
+)
 
 func InitDefaultDB(logger *zap.Logger) *gorm.DB {
 	return InitDBWithPrefix("database", "")

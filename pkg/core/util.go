@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/asaskevich/EventBus"
+	"github.com/spf13/viper"
 	"go.uber.org/dig"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -212,4 +213,12 @@ func GetStructNameOnly[T any](rr T) string {
 	}
 
 	return tname[from:to]
+}
+
+func ReplaceTablePrefix(raw string, prefixes ...string) string {
+	prefix := viper.GetString("database.tablePrefix")
+	if len(prefixes) > 0 {
+		prefix = prefixes[0]
+	}
+	return strings.ReplaceAll(raw, "{{.tableprefix}}", prefix)
 }
