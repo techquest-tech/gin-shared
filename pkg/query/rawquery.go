@@ -156,12 +156,14 @@ func (r *RawQuery) sum(db *gorm.DB, data map[string]any) (int64, error) {
 	}
 
 	count := int64(0)
+	zap.L().Debug("run summary sql", zap.String("sql", sql), zap.Any("params", params))
 	tx := db.Raw(sql, params...)
 
 	err := tx.Find(&count).Error
 	if err != nil {
 		return 0, err
 	}
+	zap.L().Debug("summary sql result", zap.Int64("count", count))
 	return count, nil
 }
 
