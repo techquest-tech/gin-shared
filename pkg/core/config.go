@@ -109,7 +109,7 @@ func InitEmbedConfig() {
 // 	return nil
 // }
 
-func loadConfig(configname string) error {
+func ReadYamlfile(configname string) (*viper.Viper, error) {
 	configLocker.Lock()
 	defer configLocker.Unlock()
 
@@ -122,10 +122,34 @@ func loadConfig(configname string) error {
 	err := profileConfig.ReadInConfig()
 	if err != nil {
 		log.Printf("load %s failed. %v", configname, err)
+		return nil, err
+	}
+
+	log.Println(configname + " config loaded.")
+	return profileConfig, nil
+}
+
+func loadConfig(configname string) error {
+	// configLocker.Lock()
+	// defer configLocker.Unlock()
+
+	// profileConfig := viper.New()
+	// profileConfig.SetConfigName(configname)
+	// profileConfig.SetConfigType("yaml")
+	// profileConfig.AddConfigPath(ConfigFolder)
+	// profileConfig.AddConfigPath(".")
+
+	// err := profileConfig.ReadInConfig()
+	// if err != nil {
+	// 	log.Printf("load %s failed. %v", configname, err)
+	// 	return err
+	// }
+	r, err := ReadYamlfile(configname)
+	if err != nil {
+		log.Printf("load %s failed. %v", configname, err)
 		return err
 	}
-	viper.MergeConfigMap(profileConfig.AllSettings())
-	log.Println(configname + " config loaded.")
+	viper.MergeConfigMap(r.AllSettings())
 	return nil
 }
 

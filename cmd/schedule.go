@@ -11,18 +11,21 @@ import (
 
 // type Schedule core.Startups
 
+var WithAllStartups = func(cmd *cobra.Command, args []string) error {
+	return core.GetContainer().Invoke(func(p core.Startups) error {
+		core.NotifyStarted()
+		CloseOnlyNotified()
+		core.NotifyStopping()
+		return nil
+	})
+}
+
 func ScheduleLikeCmd(cmdUse, cmdShort string) *cobra.Command {
 	return &cobra.Command{
 		Use:   cmdUse,
 		Short: cmdShort,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return core.GetContainer().Invoke(func(p core.Startups) error {
-				core.NotifyStarted()
-				CloseOnlyNotified()
-				core.NotifyStopping()
-				return nil
-			})
-		}}
+		RunE:  WithAllStartups,
+	}
 }
 
 // scheduleCmd represents the schedule command

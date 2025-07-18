@@ -3,10 +3,10 @@ package orm
 import (
 	"bytes"
 	"fmt"
-	"strings"
 	"text/template"
 
 	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -19,13 +19,7 @@ func DefaulViewSql(tablePrefix, view, query string) string {
 	return fmt.Sprintf(ViewMysqlTmp, tablePrefix, view, query)
 }
 
-func ReplaceTablePrefix(raw string, prefixes ...string) string {
-	prefix := viper.GetString("database.tablePrefix")
-	if len(prefixes) > 0 {
-		prefix = prefixes[0]
-	}
-	return strings.ReplaceAll(raw, "{{.tableprefix}}", prefix)
-}
+var ReplaceTablePrefix = core.ReplaceTablePrefix
 
 const ViewMysqlTmp = "CREATE OR REPLACE ALGORITHM = UNDEFINED VIEW %s%s AS %s"
 
