@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/asaskevich/EventBus"
 	"github.com/robfig/cron/v3"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
@@ -17,7 +16,6 @@ var LockerTimeout = time.Hour
 
 type ScheduleLoker struct {
 	Locker  locker.Locker
-	Bus     EventBus.Bus
 	Jobname string
 }
 

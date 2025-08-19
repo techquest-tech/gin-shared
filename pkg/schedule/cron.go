@@ -3,40 +3,38 @@ package schedule
 import (
 	"fmt"
 
-	"github.com/asaskevich/EventBus"
 	"github.com/robfig/cron/v3"
 	"github.com/samber/lo"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/locker"
 	"go.uber.org/dig"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 var ScheduleLockerEnabled = true
 var JobHistoryEnabled = true
 var ScheduleDisabled = false
 
-type CronZaplog struct {
-	logger *zap.Logger
-}
+// type CronZaplog struct {
+// 	logger *zap.Logger
+// }
 
-func (c *CronZaplog) Info(msg string, keysAndValues ...interface{}) {
-	args := []interface{}{msg}
-	args = append(args, keysAndValues...)
-	c.logger.Sugar().Info(args...)
-}
-func (c *CronZaplog) Error(err error, msg string, keysAndValues ...interface{}) {
-	args := []interface{}{err.Error() + "," + msg}
-	args = append(args, keysAndValues...)
-	c.logger.Sugar().Error(args...)
-}
+// func (c *CronZaplog) Info(msg string, keysAndValues ...interface{}) {
+// 	args := []interface{}{msg}
+// 	args = append(args, keysAndValues...)
+// 	c.logger.Sugar().Info(args...)
+// }
+// func (c *CronZaplog) Error(err error, msg string, keysAndValues ...interface{}) {
+// 	args := []interface{}{err.Error() + "," + msg}
+// 	args = append(args, keysAndValues...)
+// 	c.logger.Sugar().Error(args...)
+// }
 
 type JobParams struct {
 	dig.In
-	DB     *gorm.DB `optional:"true"`
 	Logger *zap.Logger
-	Bus    EventBus.Bus `optional:"true"`
+	// DB     *gorm.DB `optional:"true"`
+	// Bus    EventBus.Bus `optional:"true"`
 }
 
 func CheckIfEnabled() cron.JobWrapper {
@@ -80,52 +78,32 @@ type ScheduleOptions struct {
 	NoHistory bool
 }
 
-func CreateSchedule(jobname, schedule string, cmd func(), opts ...ScheduleOptions) error {
-	jobs[jobname] = cmd
-
-	err := core.GetContainer().Invoke(func(p JobParams, pp core.OptionalParam[locker.Locker]) error {
+func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...ScheduleOptions) error {
+	err := core.GetContainer().Invoke(func(logger *zap.Logger, locker locker.Locker) error {
 		opt := &ScheduleOptions{}
 		if len(opts) > 0 {
 			opt = &opts[0]
 		}
 		if ScheduleDisabled && !opt.NoGlobal {
-			p.Logger.Info("cronjob is disabled.", zap.String("job", jobname))
+			logger.Info("cronjob is disabled.", zap.String("job", jobname))
 			return nil
 		}
-		l := &CronZaplog{
-			logger: p.Logger,
-		}
-		opts := []cron.JobWrapper{cron.Recover(l), cron.SkipIfStillRunning(l)}
-
-		if !opt.NoGlobal {
-			opts = append(opts, CheckIfEnabled())
-		}
-
-		if JobHistoryEnabled && p.Bus != nil && !opt.NoHistory {
-			opts = append(opts, Withhistory(jobname))
-		}
-
-		if ScheduleLockerEnabled && pp.P != nil && !opt.Nolocker {
-			locker := &ScheduleLoker{
-				Locker:  pp.P,
-				Bus:     p.Bus,
-				Jobname: jobname,
-			}
-			opts = append(opts, locker.Wrapper())
-		}
-		cr := cron.New(cron.WithChain(opts...))
-		item, err := cr.AddFunc(schedule, cmd)
+		fn := wrapFuncJob(jobname, locker, cmd, opt)
+		jobs[jobname] = fn
+		cr := cron.New()
+		item, err := cr.AddFunc(schedule, fn)
 		if err != nil {
+			logger.Error("add job failed", zap.Error(err))
 			return err
 		}
 		cr.Start()
 		entry := cr.Entry(item)
 		next := entry.Next
-		p.Logger.Info("schedule job done", zap.String("job", jobname), zap.Time("next runtime", next))
+		logger.Info("schedule job done", zap.String("job", jobname), zap.Time("next runtime", next))
 		core.OnServiceStopping(func() {
-			p.Logger.Info("try to stop scheduled job.", zap.String("job", jobname))
+			logger.Info("try to stop scheduled job.", zap.String("job", jobname))
 			cr.Stop()
-			p.Logger.Info("scheduled job stopped.", zap.String("job", jobname))
+			logger.Info("scheduled job stopped.", zap.String("job", jobname))
 		})
 		return nil
 	})
@@ -133,4 +111,11 @@ func CreateSchedule(jobname, schedule string, cmd func(), opts ...ScheduleOption
 		zap.L().Error("schedule job failed.", zap.String("job", jobname), zap.Error(err))
 	}
 	return err
+}
+
+func CreateSchedule(jobname, schedule string, cmd func(), opts ...ScheduleOptions) error {
+	return CreateScheduledJob(jobname, schedule, func() error {
+		cmd()
+		return nil
+	}, opts...)
 }

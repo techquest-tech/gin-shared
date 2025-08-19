@@ -16,16 +16,17 @@ import (
 )
 
 const (
-	// EventJobStarted  = "event.job.started"
-	// EventJobDone     = "event.job.done"
-	// EventJobFailed   = "event.job.failed"
-	EventJobFinished = "event.job.finished"
-	EventJobFailed   = "event.job.failed"
+// EventJobStarted  = "event.job.started"
+// EventJobDone     = "event.job.done"
+// EventJobFailed   = "event.job.failed"
+// EventJobFinished = "event.job.finished"
+// EventJobFailed   = "event.job.failed"
 )
 
 var JobHistoryAdaptor = core.NewChanAdaptor[JobHistory](1000)
 
 type JobHistory struct {
+	App      string
 	Job      string
 	Start    time.Time
 	Finished time.Time
@@ -64,20 +65,19 @@ func (p *JobHistoryProvider) GetLastDoneJobHistory(jobname string) *JobHistory {
 	return nil
 }
 func (p *JobHistoryProvider) SetJobhistory(h JobHistory) {
-	// if p.Bus != nil {
-	// 	p.Bus.Publish(EventJobFinished, h)
-	// }
 	JobHistoryAdaptor.Push(h)
-
-	if !h.Succeed {
-		return
-	}
 	data, err := json.Marshal(h)
+	logger := zap.L()
 	if err != nil {
-		zap.L().Error("marshal job history failed", zap.Error(err))
+		logger.Error("marshal job history failed", zap.Error(err))
 		return
 	}
-	p.Persister.SetValues(context.TODO(), jobHistoryPersisterKey, map[string]any{h.Job: string(data)})
+	if h.Succeed {
+		p.Persister.SetValues(context.TODO(), jobHistoryPersisterKey, map[string]any{h.Job: string(data)})
+	} else {
+		logger.Warn("job is not succeed, ignore history")
+	}
+
 }
 func init() {
 	core.Provide(func(bus EventBus.Bus, h cache.Hash) *JobHistoryProvider {
@@ -96,6 +96,7 @@ func GetLastDoneJobHistory(jobname string) *JobHistory {
 	return nil
 }
 
+// decrepted, will be removed next release.
 func Withhistory(jobname string) cron.JobWrapper {
 	return func(j cron.Job) cron.Job {
 		return cron.FuncJob(
@@ -142,9 +143,7 @@ func Withhistory(jobname string) cron.JobWrapper {
 					task.Duration = time.Since(task.Start)
 					task.Finished = done
 					logger.Debug("job end", zap.Duration("duration", task.Duration))
-					// if bus != nil {
-					// 	bus.Publish(EventJobFinished, task)
-					// }
+
 					if provider != nil {
 						provider.SetJobhistory(task)
 					}
