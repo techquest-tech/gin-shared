@@ -30,6 +30,15 @@ func NewChanAdaptor[T any](buf int) *ChanAdaptor[T] {
 		locker:    sync.Mutex{},
 	}
 	OnServiceStarted(rr.Start)
+	OnServiceStopping(func() {
+		if rr == nil {
+			zap.L().Warn("chanAdaptor is nil, ignored.")
+			return
+		}
+		close(rr.sender)
+		zap.L().Info("chanAdaptor stopped")
+		time.Sleep(GraceShutdown)
+	})
 	return rr
 }
 
@@ -87,11 +96,6 @@ func (ca *ChanAdaptor[T]) Start() {
 	}
 	zap.L().Info("chanAdaptor started")
 	ca.Started = true
-	OnServiceStopping(func() {
-		close(ca.sender)
-		zap.L().Info("chanAdaptor stopped")
-		time.Sleep(GraceShutdown)
-	})
 	for v := range ca.sender {
 		for receiver, c := range ca.receivers {
 			c <- v
@@ -103,6 +107,12 @@ func (ca *ChanAdaptor[T]) Start() {
 		close(c)
 	}
 	zap.L().Info("chanAdaptor and receivers were stopped.")
+}
+
+func (ca *ChanAdaptor[T]) Stop() {
+	zap.L().Info("chanAdaptor stopping")
+	close(ca.sender)
+	ca.Started = false
 }
 
 func (ca *ChanAdaptor[T]) Receivers() []string {
