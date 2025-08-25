@@ -7,7 +7,6 @@ import (
 	"github.com/samber/lo"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/locker"
-	"go.uber.org/dig"
 	"go.uber.org/zap"
 )
 
@@ -30,12 +29,12 @@ var ScheduleDisabled = false
 // 	c.logger.Sugar().Error(args...)
 // }
 
-type JobParams struct {
-	dig.In
-	Logger *zap.Logger
-	// DB     *gorm.DB `optional:"true"`
-	// Bus    EventBus.Bus `optional:"true"`
-}
+// type JobParams struct {
+// 	dig.In
+// 	Logger *zap.Logger
+// 	// DB     *gorm.DB `optional:"true"`
+// 	// Bus    EventBus.Bus `optional:"true"`
+// }
 
 func CheckIfEnabled() cron.JobWrapper {
 	return func(j cron.Job) cron.Job {
@@ -52,10 +51,11 @@ func CheckIfEnabled() cron.JobWrapper {
 var jobs = make(map[string]func())
 
 func Run(jobname string) (err error) {
+	rawSetting := ScheduleDisabled
 	ScheduleDisabled = true
 	fn, ok := jobs[jobname]
 	defer func() {
-		ScheduleDisabled = false
+		ScheduleDisabled = rawSetting
 		if err := recover(); err != nil {
 			zap.L().Error("run job failed", zap.String("job", jobname), zap.Any("err", err))
 		}
@@ -84,13 +84,19 @@ func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...Sche
 		if len(opts) > 0 {
 			opt = &opts[0]
 		}
+		fn := wrapFuncJob(jobname, locker, cmd, opt)
+		jobs[jobname] = fn
+
 		if ScheduleDisabled && !opt.NoGlobal {
 			logger.Info("cronjob is disabled.", zap.String("job", jobname))
 			return nil
 		}
-		fn := wrapFuncJob(jobname, locker, cmd, opt)
-		jobs[jobname] = fn
-		cr := cron.New()
+		chain := []cron.JobWrapper{}
+		if !opt.NoGlobal {
+			chain = append(chain, CheckIfEnabled())
+		}
+		cr := cron.New(cron.WithChain(chain...))
+
 		item, err := cr.AddFunc(schedule, fn)
 		if err != nil {
 			logger.Error("add job failed", zap.Error(err))

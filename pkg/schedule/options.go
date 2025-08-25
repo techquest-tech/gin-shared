@@ -15,10 +15,6 @@ func wrapFuncJob(jobname string, lockerService locker.Locker, fn func() error, o
 	return cron.FuncJob(
 		func() {
 			logger := zap.L().With(zap.String("jobname", jobname))
-			if ScheduleDisabled && !opt.NoGlobal {
-				logger.Info("cronjob is disabled.", zap.String("job", jobname))
-				return
-			}
 			task := JobHistory{
 				App:     core.AppName,
 				Job:     jobname,
