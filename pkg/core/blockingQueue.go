@@ -1,8 +1,9 @@
 package core
 
 import (
-	"sync"
 	"errors"
+	"sync"
+
 	"go.uber.org/zap"
 )
 
@@ -35,7 +36,8 @@ func (q *BlockingQueue[T]) Push(v T) error {
 
 	q.data = append(q.data, v)
 	q.cond.Signal() // 唤醒一个等待的 Pop
-    return nil
+	zap.L().Debug("push", zap.Any("value", v))
+	return nil
 }
 
 // Pop 从队列取出元素，如果为空则阻塞，直到有数据或队列被清空/关闭
@@ -55,6 +57,7 @@ func (q *BlockingQueue[T]) Pop() (T, bool) {
 	if len(q.data) > 0 {
 		v := q.data[0]
 		q.data = q.data[1:]
+		zap.L().Debug("pop", zap.Any("value", v))
 		return v, true
 	}
 
@@ -67,8 +70,8 @@ func (q *BlockingQueue[T]) Clear() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	zap.L().Info("queue cleared", zap.Int("totalMessages", len(q.data)))
 	q.data = q.data[:0] // 清空 slice
-	// 不需要 signal，因为 Pop 会继续等待新数据
 }
 
 // Close 关闭队列，唤醒所有等待的 Pop，使其返回 (zero, false)
@@ -79,5 +82,5 @@ func (q *BlockingQueue[T]) Close() {
 	q.closed = true
 	q.data = q.data[:0]
 	q.cond.Broadcast() // 唤醒所有等待者
-    zap.L().Info("queue closed")
+	zap.L().Info("queue closed")
 }
