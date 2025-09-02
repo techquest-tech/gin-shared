@@ -87,7 +87,7 @@ func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...Sche
 		fn := wrapFuncJob(jobname, locker, cmd, opt)
 		jobs[jobname] = fn
 
-		if ScheduleDisabled && !opt.NoGlobal {
+		if (ScheduleDisabled && !opt.NoGlobal) || schedule == "" || schedule == "-" {
 			logger.Info("cronjob is disabled.", zap.String("job", jobname))
 			return nil
 		}
