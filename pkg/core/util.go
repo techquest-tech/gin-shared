@@ -222,3 +222,9 @@ func ReplaceTablePrefix(raw string, prefixes ...string) string {
 	}
 	return strings.ReplaceAll(raw, "{{.tableprefix}}", prefix)
 }
+
+func IsStructOrPtrToStruct(v interface{}) bool {
+	val := reflect.ValueOf(v)
+	kind := val.Kind()
+	return kind == reflect.Struct || (kind == reflect.Ptr && val.Elem().Kind() == reflect.Struct)
+}
