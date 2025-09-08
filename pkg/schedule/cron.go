@@ -98,8 +98,7 @@ func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...Sche
 			chain = append(chain, CheckIfEnabled())
 		}
 		// found cron won't work with sub-second scheduling, use time.Ticker instead
-		if strings.HasPrefix(schedule, "@every ") {
-			durStr := strings.TrimPrefix(schedule, "@every ")
+		if durStr, ok := strings.CutPrefix(schedule, "@every "); ok {
 			dur, err := time.ParseDuration(durStr)
 			if err != nil {
 				logger.Warn("parse duration failed, continue with cron", zap.Error(err), zap.String("dur", durStr))
