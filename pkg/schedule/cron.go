@@ -2,6 +2,8 @@ package schedule
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/robfig/cron/v3"
 	"github.com/samber/lo"
@@ -95,6 +97,31 @@ func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...Sche
 		if !opt.NoGlobal {
 			chain = append(chain, CheckIfEnabled())
 		}
+		// found cron won't work with sub-second scheduling, use time.Ticker instead
+		if strings.HasPrefix(schedule, "@every ") {
+			durStr := strings.TrimPrefix(schedule, "@every ")
+			dur, err := time.ParseDuration(durStr)
+			if err != nil {
+				logger.Warn("parse duration failed, continue with cron", zap.Error(err), zap.String("dur", durStr))
+			}
+			if dur < time.Second {
+				logger.Info("use time.Ticker instead of cron", zap.Duration("dur", dur))
+				ticker := time.NewTicker(dur)
+				core.OnServiceStopping(func() {
+					zap.L().Info("ticker stopped", zap.String("job", jobname))
+					ticker.Stop()
+				})
+				go func() {
+					for range ticker.C {
+						zap.L().Debug("ticker ticking", zap.String("job", jobname), zap.Duration("duration", dur))
+						fn()
+						zap.L().Debug("ticker ticked", zap.String("job", jobname))
+					}
+				}()
+				return nil
+			}
+		}
+
 		cr := cron.New(cron.WithChain(chain...))
 
 		item, err := cr.AddFunc(schedule, fn)
@@ -105,7 +132,7 @@ func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...Sche
 		cr.Start()
 		entry := cr.Entry(item)
 		next := entry.Next
-		logger.Info("schedule job done", zap.String("job", jobname), zap.Time("next runtime", next))
+		logger.Info("schedule job done", zap.String("job", jobname), zap.String("schedule", schedule), zap.Time("next runtime", next))
 		core.OnServiceStopping(func() {
 			logger.Info("try to stop scheduled job.", zap.String("job", jobname))
 			cr.Stop()
