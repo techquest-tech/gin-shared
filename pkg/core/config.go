@@ -18,7 +18,7 @@ const (
 	EncryptedFile = "config/app.cfg"
 )
 
-var AppName = "RFID App"
+var AppName = "RFID_App"
 var Version = "latest"
 var ConfigFolder = "config"
 

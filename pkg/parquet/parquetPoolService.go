@@ -3,13 +3,13 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/jinzhu/copier"
 	"github.com/parquet-go/parquet-go"
 	"github.com/samber/lo"
+	"github.com/spf13/afero"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/messaging"
 	"github.com/thanhpk/randstr"
@@ -36,20 +36,26 @@ func DefaultParquetSetting() *ParquetSetting {
 	}
 }
 
-func NewParquetDataService(setting *ParquetSetting, s *parquet.Schema) (*ParquetDataService, error) {
-	return &ParquetDataService{
-		Setting: setting,
-		Raw:     make(chan any, setting.BufferSize),
-		Schema:  s,
-	}, nil
-}
+// func NewParquetDataService(setting *ParquetSetting, s *parquet.Schema) (*ParquetDataService, error) {
+// 	return &ParquetDataService{
+// 		Setting: setting,
+// 		Raw:     make(chan any, setting.BufferSize),
+// 		Schema:  s,
+// 	}, nil
+// }
 
 func NewParquetDataServiceBySchema(setting *ParquetSetting, ss *parquet.Schema, c chan any) *ParquetDataService {
-	return &ParquetDataService{
+	service := &ParquetDataService{
 		Setting: setting,
 		Raw:     c,
 		Schema:  ss,
 	}
+	var err error
+	service.fs, err = CreateFs(setting.Folder)
+	if err != nil {
+		zap.L().Fatal("create fs failed", zap.Error(err))
+	}
+	return service
 }
 
 func NewParquetDataServiceT[T any](settings *ParquetSetting, filenamePattern string, c chan T) *ParquetDataService {
@@ -64,12 +70,18 @@ func NewParquetDataServiceT[T any](settings *ParquetSetting, filenamePattern str
 		Ackfile: settings.Ackfile,
 	}
 
-	return &ParquetDataService{
+	service := &ParquetDataService{
 		Setting: clonedSettings,
 		Raw:     core.ToAnyChan(c),
 		Schema:  parquet.SchemaOf(data),
 		Event:   defaultEvent,
 	}
+	var err error
+	service.fs, err = CreateFs(clonedSettings.Folder)
+	if err != nil {
+		zap.L().Fatal("create fs failed.", zap.Error(err))
+	}
+	return service
 }
 
 type ParquetDataService struct {
@@ -78,43 +90,45 @@ type ParquetDataService struct {
 	Raw     chan any
 	Filter  func(msg []any) []any
 	Event   PersistEvent
+	fs      afero.Fs
 }
 
 // 生成文件名
-func generateFileName(folder, timestampformt string) (string, error) {
+func generateFileName(_, timestampformt string) (string, error) {
 	timestamp := time.Now().Format(timestampformt)
 
 	sand := randstr.Hex(4) // just incase any concurrent write to same file
-	result := fmt.Sprintf("%s/%s_%s.parquet", folder, timestamp, sand)
+	result := fmt.Sprintf("%s_%s.parquet", timestamp, sand)
 
 	// 获取文件所在的目录
-	dir := filepath.Dir(result)
+	// dir := filepath.Dir(result)
 
-	// 判断目录是否存在
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		// 目录不存在，创建目录
-		err := os.MkdirAll(dir, os.ModePerm)
-		if err != nil {
-			zap.L().Error("failed to create directory for parquet file")
-			return "", err
-		}
-		zap.L().Info("directory created", zap.String("dir", dir))
-	}
+	// // 判断目录是否存在
+	// if _, err := os.Stat(dir); os.IsNotExist(err) {
+	// 	// 目录不存在，创建目录
+	// 	err := os.MkdirAll(dir, os.ModePerm)
+	// 	if err != nil {
+	// 		zap.L().Error("failed to create directory for parquet file")
+	// 		return "", err
+	// 	}
+	// 	zap.L().Info("directory created", zap.String("dir", dir))
+	// }
 
 	return result, nil
 }
 
 func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
-	logger := zap.L()
 
 	filename, err := generateFileName(p.Setting.Folder, p.Setting.FilenamePattern)
 	if err != nil {
-		logger.Error("generate file name failed.", zap.Error(err))
+		zap.L().Error("generate file name failed.", zap.Error(err))
 		return "", err
 	}
+	logger := zap.L().With(zap.String("filename", filename))
+
 	defer func() {
 		if err := recover(); err != nil {
-			zap.L().Error("write parquet file failed.", zap.Any("err", err))
+			logger.Error("write parquet file failed.", zap.Any("err", err))
 			messaging.AbandonedChan <- map[string]any{
 				"error":    err,
 				"consumer": "redis2parquet",
@@ -129,12 +143,27 @@ func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
 	if p.Setting.Compress != "" {
 		options = append(options, parquet.Compression(p.Schema.Compression()))
 	}
-	err = parquet.WriteFile(filename, msgs, options...)
+
+	dir := filepath.Dir(filename)
+	if dir != "" {
+		err = EnsureDir(p.fs, dir)
+		if err != nil {
+			return "", err
+		}
+	}
+	f, err := p.fs.Create(filename)
 	if err != nil {
-		zap.L().Error("failed to write parquet file", zap.Error(err))
+		logger.Error("create parquet file failed.", zap.Error(err))
 		return "", err
 	}
-	zap.L().Info("write parquet file done.", zap.String("filename", filename))
+	defer f.Close()
+
+	err = parquet.Write(f, msgs, options...)
+	if err != nil {
+		logger.Error("failed to write parquet file", zap.Error(err))
+		return "", err
+	}
+	logger.Info("write parquet file done.", zap.String("filename", filename))
 	return filename, nil
 }
 
