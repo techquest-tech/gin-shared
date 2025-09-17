@@ -187,10 +187,10 @@ func (a *AuthService) Auth(c *gin.Context) {
 
 	if authkey, ok := a.Validate(key); ok {
 		c.Set(KeyUser, authkey)
-		c.Set("ownerID", authkey.ID)
-		c.Set("ownerName", authkey.Owner)
+		// c.Set("ownerID", authkey.ID)
+		c.Set("owner", authkey.Owner)
 		c.Set("user", authkey.UserName)
-		c.Set("role", authkey.Role)
+		// c.Set("role", authkey.Role)
 		c.Next()
 	} else {
 		resp := ginshared.GeneralResp{
