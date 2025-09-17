@@ -49,12 +49,19 @@ var embedcache map[string]*viper.Viper = make(map[string]*viper.Viper)
 
 var configLocker = sync.Mutex{}
 
+func newViper() *viper.Viper {
+	config := viper.New()
+	config.SetConfigType("yaml")
+	config.AutomaticEnv()
+	config.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	return config
+}
 func ToEmbedConfig(content []byte, keys ...string) {
 	configLocker.Lock()
 	defer configLocker.Unlock()
 
-	configItem := viper.New()
-	configItem.SetConfigType("yaml")
+	configItem := newViper()
+
 	err := configItem.ReadConfig(bytes.NewReader(content))
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -113,9 +120,9 @@ func ReadYamlfile(configname string) (*viper.Viper, error) {
 	configLocker.Lock()
 	defer configLocker.Unlock()
 
-	profileConfig := viper.New()
+	profileConfig := newViper()
+
 	profileConfig.SetConfigName(configname)
-	profileConfig.SetConfigType("yaml")
 	profileConfig.AddConfigPath(ConfigFolder)
 	profileConfig.AddConfigPath(".")
 

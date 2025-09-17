@@ -29,7 +29,7 @@ func CreateFs(path string) (afero.Fs, error) {
 	}
 
 	switch {
-	case path == "mem":
+	case path == "mem" || path == "":
 		l.Info("use mem map fs")
 		return afero.NewMemMapFs(), nil
 	case strings.HasPrefix(path, "oss://"):
@@ -48,8 +48,8 @@ func CreateFs(path string) (afero.Fs, error) {
 		Endpoint := os.Getenv("OSS_ENDPOINT")
 		region := os.Getenv("OSS_REGION")
 		if accessKeyId == "" || secretAccessKey == "" || Endpoint == "" || region == "" {
-			l.Error("OSS config missed")
-			return nil, fmt.Errorf("OSS config missed")
+			l.Warn("OSS config missed, use regular file instead", zap.String("path", startPath))
+			return CreateFs(startPath)
 		}
 		l.Info("going to connect to oss", zap.String("endpoint", Endpoint), zap.String("bucket", bucket), zap.String("path", startPath))
 		sess, err := session.NewSession(&aws.Config{
