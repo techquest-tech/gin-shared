@@ -1,4 +1,4 @@
-package parquet
+package core
 
 import (
 	"fmt"
@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	s3 "github.com/fclairamb/afero-s3"
 	"github.com/spf13/afero"
-	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
 )
 
@@ -24,7 +23,7 @@ func CreateFs(path string) (afero.Fs, error) {
 			env = "dev"
 		}
 		path = strings.ReplaceAll(path, "{{env}}", env)
-		path = strings.ReplaceAll(path, "{{app}}", core.AppName)
+		path = strings.ReplaceAll(path, "{{app}}", AppName)
 		l.Debug("get real full path", zap.String("realpath", path))
 	}
 

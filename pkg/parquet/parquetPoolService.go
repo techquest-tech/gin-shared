@@ -51,7 +51,7 @@ func NewParquetDataServiceBySchema(setting *ParquetSetting, ss *parquet.Schema, 
 		Schema:  ss,
 	}
 	var err error
-	service.fs, err = CreateFs(setting.Folder)
+	service.fs, err = core.CreateFs(setting.Folder)
 	if err != nil {
 		zap.L().Fatal("create fs failed", zap.Error(err))
 	}
@@ -66,18 +66,18 @@ func NewParquetDataServiceT[T any](settings *ParquetSetting, filenamePattern str
 
 	clonedSettings.FilenamePattern = fmt.Sprintf(filenamePattern, core.GetStructNameOnly(data))
 
-	defaultEvent := &DefaultPersistEvent{
-		Ackfile: settings.Ackfile,
-	}
+	// defaultEvent := &DefaultPersistEvent{
+	// 	Ackfile: settings.Ackfile,
+	// }
 
 	service := &ParquetDataService{
 		Setting: clonedSettings,
 		Raw:     core.ToAnyChan(c),
 		Schema:  parquet.SchemaOf(data),
-		Event:   defaultEvent,
+		// Event:   defaultEvent,
 	}
 	var err error
-	service.fs, err = CreateFs(clonedSettings.Folder)
+	service.fs, err = core.CreateFs(clonedSettings.Folder)
 	if err != nil {
 		zap.L().Fatal("create fs failed.", zap.Error(err))
 	}
@@ -89,8 +89,8 @@ type ParquetDataService struct {
 	Schema  *parquet.Schema
 	Raw     chan any
 	Filter  func(msg []any) []any
-	Event   PersistEvent
-	fs      afero.Fs
+	// Event   PersistEvent
+	fs afero.Fs
 }
 
 // 生成文件名
@@ -146,7 +146,7 @@ func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
 
 	dir := filepath.Dir(filename)
 	if dir != "" {
-		err = EnsureDir(p.fs, dir)
+		err = core.EnsureDir(p.fs, dir)
 		if err != nil {
 			return "", err
 		}
@@ -200,14 +200,14 @@ func (p *ParquetDataService) Start(ctx context.Context) error {
 			if err != nil {
 				logger.Error("write message to parquet file failed.", zap.Error(err))
 				// return err
-				if p.Event != nil {
-					p.Event.OnPersistFailed(msgs, err)
-				}
+				// if p.Event != nil {
+				// 	p.Event.OnPersistFailed(msgs, err)
+				// }
 				continue
 			}
-			if p.Event != nil {
-				go p.Event.OnPersistDone(msgs, fullname)
-			}
+			// if p.Event != nil {
+			// 	go p.Event.OnPersistDone(msgs, fullname)
+			// }
 			dd := time.Since(start)
 			logger.Info("persist message done.", zap.String("trunk file", fullname), zap.Duration("duration", dd), zap.Int("len", bufferedLen))
 		} else {
