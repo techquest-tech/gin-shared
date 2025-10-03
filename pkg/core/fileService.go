@@ -32,15 +32,7 @@ func CreateFs(path string) (afero.Fs, error) {
 		return afero.NewMemMapFs(), nil
 	case strings.HasPrefix(path, "oss://"):
 		startPath := strings.TrimPrefix(path, "oss://")
-		// ref to fsspec, oss://<bucket name>/<real path>
-		// parts := strings.SplitN(ssopath, "/", 2)
-		// if len(parts) < 2 {
-		// 	l.Error("invalid OSS URL: missing bucket or path")
-		// 	return nil, fmt.Errorf("invalid OSS URL: missing bucket or path")
-		// }
-
 		bucket := os.Getenv("OSS_BUCKET")
-		// startPath := parts[1]
 		accessKeyId := os.Getenv("OSS_ID")
 		secretAccessKey := os.Getenv("OSS_SECRET")
 		Endpoint := os.Getenv("OSS_ENDPOINT")
