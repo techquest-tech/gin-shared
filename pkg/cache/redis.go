@@ -96,7 +96,7 @@ func NewRedisClient(opts *redis.Options, logger *zap.Logger) *redis.Client {
 		logger.Error("failed to connect to redis.", zap.String("redis", opts.Addr), zap.Error(err))
 		panic(err)
 	}
-	logger.Info("connected to redis", zap.String("redis", opts.Addr))
+	logger.Info("connected to redis", zap.String("redis", opts.Addr), zap.Int("db", opts.DB))
 
 	return client
 }
