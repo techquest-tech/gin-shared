@@ -15,6 +15,7 @@ require (
 	github.com/go-playground/validator/v10 v10.27.0
 	github.com/go-redis/cache/v9 v9.0.0
 	github.com/jinzhu/copier v0.4.0
+	github.com/joho/godotenv v1.5.1
 	github.com/jordan-wright/email v4.0.1-0.20210109023952-943e75fe5223+incompatible
 	github.com/parquet-go/parquet-go v0.25.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
