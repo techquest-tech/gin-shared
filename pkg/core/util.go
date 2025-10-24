@@ -59,10 +59,11 @@ func NotifyStopping() { // not used anymore, empty fun only.
 func BeforeBootup(key string) {
 	beforebootup.Do(func() {
 		// load .env if file exists
-		err := godotenv.Load()
-		if err != nil {
-			fmt.Println("read .env file failed. ignored.", err.Error())
-		}
+		godotenv.Load("config/.env", ".env")
+		// if err != nil {
+		// 	fmt.Println("read .env file failed. ignored.", err.Error())
+		// }
+
 		Provide(func() ConfigSecret {
 			return ConfigSecret(key)
 		})
