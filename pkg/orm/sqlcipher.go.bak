@@ -1,0 +1,10 @@
+package orm
+
+import (
+	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite/bin/sqlite3_sqlcipher" // 启用加密支持
+)
+
+func init() {
+	RegisterDialect("sqlite3_sqlcipher", &Sqlite3Dialect{})
+}

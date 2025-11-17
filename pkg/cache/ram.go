@@ -7,6 +7,8 @@ import (
 	"github.com/samber/lo"
 )
 
+var DefaultLocalCacheItems = 0 //local cache items. it's important for performance & if redis failed.
+
 type CacheRam[T any] struct {
 	ram cache.Cache
 }
