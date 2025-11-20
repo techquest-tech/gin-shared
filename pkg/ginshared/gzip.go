@@ -12,7 +12,7 @@ type GzipEnabled struct {
 }
 
 func (*GzipEnabled) OnEngineInited(r *gin.Engine) error {
-	r.Use(gzip.Gzip(gzip.DefaultCompression))
+	r.Use(gzip.Gzip(gzip.BestCompression, gzip.WithExcludedExtensions([]string{".png", ".jpg", ".gif", ".mp4", ".zip", ".pdf"})))
 	return nil
 }
 

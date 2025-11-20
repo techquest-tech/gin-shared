@@ -1,3 +1,5 @@
+//go:build !disableCORS && !all
+
 package ginshared
 
 import (
@@ -10,7 +12,7 @@ import (
 
 type CorsComponent struct {
 	DefaultComponent
-	Enabled bool
+	// Enabled bool
 }
 
 // func init() {
