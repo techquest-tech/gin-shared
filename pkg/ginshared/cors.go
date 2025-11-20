@@ -1,4 +1,4 @@
-//go:build !disableCORS && !all
+//go:build !disableCORS || all
 
 package ginshared
 
