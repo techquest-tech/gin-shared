@@ -31,12 +31,13 @@ func NewChanAdaptor[T any](buf int) *ChanAdaptor[T] {
 	}
 	OnServiceStarted(rr.Start)
 	OnServiceStopping(func() {
+		l := rr.getLogger()
 		if rr == nil {
-			zap.L().Warn("chanAdaptor is nil, ignored.")
+			l.Warn("chanAdaptor is nil, ignored.")
 			return
 		}
 		close(rr.sender)
-		zap.L().Info("chanAdaptor stopped")
+		l.Info("chanAdaptor stopped")
 		time.Sleep(GraceShutdown)
 	})
 	return rr
@@ -46,11 +47,16 @@ func (ca *ChanAdaptor[T]) Push(data T) {
 	ca.sender <- data
 }
 
+func (ca *ChanAdaptor[T]) getLogger() *zap.Logger {
+	var v T
+	return zap.L().With(zap.String("adaptor", GetStructNameOnly(v)))
+}
+
 func (ca *ChanAdaptor[T]) Sub(receiver string) chan T {
 	if receiver == "" {
 		receiver = randstr.Hex(16)
 	}
-	l := zap.L().With(zap.String("receiver", receiver))
+	l := ca.getLogger().With(zap.String("receiver", receiver))
 	if ca.Started {
 		l.Warn("adaptor is started, can't add new receiver")
 		return nil
@@ -69,7 +75,7 @@ func (ca *ChanAdaptor[T]) Sub(receiver string) chan T {
 }
 
 func (ca *ChanAdaptor[T]) Subscripter(receiver string, fn Handler[T]) {
-	l := zap.L().With(zap.String("receiver", receiver))
+	l := ca.getLogger().With(zap.String("receiver", receiver))
 	if fn == nil {
 		l.Warn("handler is nil")
 		return
@@ -90,27 +96,28 @@ func (ca *ChanAdaptor[T]) Subscripter(receiver string, fn Handler[T]) {
 
 // make sure all receivers reg before start()
 func (ca *ChanAdaptor[T]) Start() {
+	l := ca.getLogger()
 	if ca.Started {
 		zap.L().Warn("chanAdaptor already started")
 		return
 	}
-	zap.L().Info("chanAdaptor started")
+	l.Info("chanAdaptor started")
 	ca.Started = true
 	for v := range ca.sender {
 		for receiver, c := range ca.receivers {
 			c <- v
-			zap.L().Debug("chanAdaptor fwd message", zap.String("receiver", receiver))
+			l.Debug("chanAdaptor fwd message", zap.String("receiver", receiver))
 		}
 	}
 
 	for _, c := range ca.receivers {
 		close(c)
 	}
-	zap.L().Info("chanAdaptor and receivers were stopped.")
+	l.Info("chanAdaptor and receivers were stopped.")
 }
 
 func (ca *ChanAdaptor[T]) Stop() {
-	zap.L().Info("chanAdaptor stopping")
+	ca.getLogger().Info("chanAdaptor stopping")
 	close(ca.sender)
 	ca.Started = false
 }
