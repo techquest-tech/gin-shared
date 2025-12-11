@@ -54,15 +54,8 @@ func initBasedRouterGroup(logger *zap.Logger, router *gin.Engine) *gin.RouterGro
 }
 
 func init() {
-
-	// core.Container.Provide(core.InitLogger)
-
 	core.Container.Provide(initEngine)
-
 	core.Container.Provide(initBasedRouterGroup)
-	// core.Container.Provide(tracing.NewTracingRequestService)
-	// core.RegisterComponent(&cors.CorsComponent{})
-	// core.RegisterComponent(&prom.Prom{})
 }
 
 type Params struct {
