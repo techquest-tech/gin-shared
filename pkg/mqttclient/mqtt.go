@@ -76,7 +76,16 @@ func (m *MqttService) OnConnect(c mqtt.Client) {
 }
 
 func (m *MqttService) Pub(topic string, qos byte, retained bool, payload any) error {
-	data, _ := json.Marshal(payload)
+	var data []byte
+
+	switch v := payload.(type) {
+	case string:
+		data = []byte(v)
+	case []byte:
+		data = v
+	default:
+		data, _ = json.Marshal(payload)
+	}
 	token := m.Client.Publish(topic, qos, retained, data)
 	done := token.WaitTimeout(5 * time.Second)
 	if !done || token.Error() != nil {
@@ -208,7 +217,7 @@ func NewMQTTClient(logger *zap.Logger, broke *MqttService, subKey string) (*Mqtt
 	return broke, nil
 }
 
-func InitMqtt(logger *zap.Logger) (*MqttService, error) {
+func initMqtt(logger *zap.Logger) (*MqttService, error) {
 	return NewMQTTClient(logger, &MqttService{
 		Endpoint:      "tcp://127.0.0.1:1883",
 		Logger:        logger,
@@ -216,4 +225,8 @@ func InitMqtt(logger *zap.Logger) (*MqttService, error) {
 		Cleansession:  true,
 		AutoReconnect: true,
 	}, "mqtt")
+}
+
+func init() {
+	core.Provide(initMqtt)
 }
