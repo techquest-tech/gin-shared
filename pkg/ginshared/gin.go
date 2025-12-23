@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -85,6 +86,13 @@ func Start() error {
 	return core.Container.Invoke(func(p Params) (err error) {
 		viper.SetDefault(KeyAddress, ":5001")
 		viper.SetDefault(KeyShutdown, 3*time.Second)
+
+		// check if have static folder, if yes, enabled the static router
+		info, err := os.Stat("static")
+		if err == nil && info.IsDir() {
+			p.Router.Static("/", "static")
+			p.Logger.Info("static router enabled.")
+		}
 
 		address := viper.GetString(KeyAddress)
 		shutdownDur := viper.GetDuration(KeyShutdown)
