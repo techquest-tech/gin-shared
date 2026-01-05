@@ -234,6 +234,8 @@ func Query[T any](db *gorm.DB, r *RawQuery, data map[string]any) ([]T, error) {
 
 	tx := db.Raw(sql, params...)
 
+	zap.L().Debug("run sql", zap.String("sql", sql), zap.Any("params", params))
+
 	err := tx.Find(&result).Error
 
 	return result, err

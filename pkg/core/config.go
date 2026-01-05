@@ -36,17 +36,6 @@ type Bootup struct {
 
 var embedcache map[string]*viper.Viper = make(map[string]*viper.Viper)
 
-// func embedGenerated() bool {
-// 	_, err := os.Stat(filepath.Join(ConfigFolder, EmbedConfigFile+".yaml"))
-// 	if err != nil {
-// 		if !os.IsNotExist(err) {
-// 			zap.L().Error("check file status failed.", zap.Error(err))
-// 		}
-// 		return false
-// 	}
-// 	return true
-// }
-
 var configLocker = sync.Mutex{}
 
 func newViper() *viper.Viper {
@@ -124,6 +113,7 @@ func ReadYamlfile(configname string) (*viper.Viper, error) {
 
 	profileConfig.SetConfigName(configname)
 	profileConfig.AddConfigPath(ConfigFolder)
+	profileConfig.AddConfigPath("../" + ConfigFolder)
 	profileConfig.AddConfigPath(".")
 
 	err := profileConfig.ReadInConfig()
