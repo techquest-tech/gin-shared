@@ -93,6 +93,7 @@ func GetLastDoneJobHistory(jobname string) *JobHistory {
 	if provider != nil {
 		return provider.GetLastDoneJobHistory(jobname)
 	}
+	zap.L().Warn("job history provider not initialized")
 	return nil
 }
 

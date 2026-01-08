@@ -26,7 +26,7 @@ var ConfigFolder = "config"
 
 type ConfigSecret []byte
 
-type EmbedConfigReady interface{}
+type EmbedConfigReady any
 
 type Bootup struct {
 	dig.In
@@ -151,6 +151,15 @@ func loadConfig(configname string) error {
 }
 
 func InitConfig(p Bootup) error {
+	for _, item := range EnvValues {
+		vv := strings.SplitN(item, "=", 2)
+		if len(vv) == 2 {
+			k := strings.TrimSpace(vv[0])
+			v := strings.TrimSpace(vv[1])
+			os.Setenv(k, v)
+			log.Printf("set env %s = %s", k, v)
+		}
+	}
 	if p.Secret != nil {
 		err := ReadEncryptConfig(p.Secret, EncryptedFile)
 		if err == nil {

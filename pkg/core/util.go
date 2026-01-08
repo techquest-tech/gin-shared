@@ -56,6 +56,8 @@ func NotifyStarted() {
 func NotifyStopping() { // not used anymore, empty fun only.
 }
 
+var EnvValues []string
+
 func BeforeBootup(key string) {
 	beforebootup.Do(func() {
 		// load .env if file exists
