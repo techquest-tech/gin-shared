@@ -237,3 +237,18 @@ func IsStructOrPtrToStruct(v interface{}) bool {
 	kind := val.Kind()
 	return kind == reflect.Struct || (kind == reflect.Ptr && val.Elem().Kind() == reflect.Struct)
 }
+
+// chan any in context
+type chanAnyKey struct{}
+
+// get/set chan any in context, such as for notification
+func GetChanAny[T any](ctx context.Context) chan T {
+	if v, ok := ctx.Value(chanAnyKey{}).(chan T); ok {
+		return v
+	}
+	return nil
+}
+
+func WithChanAny[T any](ctx context.Context, ch chan T) context.Context {
+	return context.WithValue(ctx, chanAnyKey{}, ch)
+}

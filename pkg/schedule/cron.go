@@ -1,6 +1,7 @@
 package schedule
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -78,6 +79,18 @@ type ScheduleOptions struct {
 	Nolocker  bool
 	NoGlobal  bool // ignore ScheduleDisabled
 	NoHistory bool
+}
+
+func CreateScheduledJobWithContext(jobname, schedule string, cmd func(ctx context.Context) error, opts ...ScheduleOptions) error {
+	fn:=func()error{
+		ctx := context.Background()
+		err := cmd(ctx)
+		if err != nil {
+			zap.L().Error("run job failed", zap.String("job", jobname), zap.Error(err))
+		}
+		return err
+	}
+	return CreateScheduledJob(jobname, schedule, fn, opts...)
 }
 
 func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...ScheduleOptions) error {
