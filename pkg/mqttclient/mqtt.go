@@ -5,7 +5,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"strings"
 	"sync"
@@ -30,6 +29,7 @@ type MqttService struct {
 	User          string
 	Password      string
 	ClientID      string
+	MaxPubWindow  int
 	Cleansession  bool
 	AutoReconnect bool
 	Qos           byte
@@ -144,10 +144,15 @@ func NewMQTTClient(logger *zap.Logger, broke *MqttService, subKey string) (*Mqtt
 	}
 
 	opts := mqtt.NewClientOptions().AddBroker(broke.Endpoint).
-		SetClientID(broke.ClientID).
-		SetCleanSession(broke.Cleansession).
-		SetAutoReconnect(broke.AutoReconnect).
-		SetMaxResumePubInFlight(math.MaxInt32)
+		SetClientID(broke.ClientID).SetAutoReconnect(broke.AutoReconnect)
+
+	if broke.Cleansession {
+		opts.SetCleanSession(broke.Cleansession)
+	}
+
+	if broke.MaxPubWindow > 0 {
+		opts.SetMaxResumePubInFlight(broke.MaxPubWindow)
+	}
 
 	// check if SSL enabled
 	if strings.HasPrefix(broke.Endpoint, "ssl://") {
@@ -219,10 +224,10 @@ func NewMQTTClient(logger *zap.Logger, broke *MqttService, subKey string) (*Mqtt
 
 func initMqtt(logger *zap.Logger) (*MqttService, error) {
 	return NewMQTTClient(logger, &MqttService{
-		Endpoint:      "tcp://127.0.0.1:1883",
-		Logger:        logger,
-		Qos:           1,
-		Cleansession:  true,
+		Endpoint: "tcp://127.0.0.1:1883",
+		Logger:   logger,
+		Qos:      1,
+		// Cleansession:  true,
 		AutoReconnect: true,
 	}, "mqtt")
 }
