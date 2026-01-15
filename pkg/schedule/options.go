@@ -1,6 +1,7 @@
 package schedule
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"time"
@@ -21,7 +22,7 @@ func wrapFuncJob(jobname string, lockerService locker.Locker, fn func() error, o
 				Start:   time.Now(),
 				Succeed: true,
 			}
-			ctx := core.RootCtx()
+			ctx := context.Background() //core.RootCtx()
 			var release locker.Release
 			var err error
 			if !opt.Nolocker {

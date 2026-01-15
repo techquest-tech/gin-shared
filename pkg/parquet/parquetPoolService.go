@@ -180,7 +180,7 @@ func (p *ParquetDataService) Start(ctx context.Context) error {
 	logger.Info("startup for message")
 
 	for {
-		logger.Debug("start buffer message", zap.Int("buffer_size", p.Setting.BufferSize), zap.Duration("buffer_dur", p.Setting.BufferDur))
+		// logger.Debug("start buffer message", zap.Int("buffer_size", p.Setting.BufferSize), zap.Duration("buffer_dur", p.Setting.BufferDur))
 
 		msgs, bufferedLen, _, ok := lo.BufferWithTimeout(p.Raw, p.Setting.BufferSize, p.Setting.BufferDur)
 
@@ -190,11 +190,11 @@ func (p *ParquetDataService) Start(ctx context.Context) error {
 		}
 
 		if bufferedLen == 0 && ok {
-			logger.Debug("no message to persist. start new buffer durtion.")
+			// logger.Debug("no message to persist. start new buffer durtion.")
 			continue
 		}
 		if bufferedLen > 0 {
-			logger.Info("start persist messages", zap.Int("len", bufferedLen))
+			logger.Debug("start persist messages", zap.Int("len", bufferedLen))
 			start := time.Now()
 			fullname, err := p.WriteMessages(msgs)
 			if err != nil {
@@ -209,10 +209,11 @@ func (p *ParquetDataService) Start(ctx context.Context) error {
 			// 	go p.Event.OnPersistDone(msgs, fullname)
 			// }
 			dd := time.Since(start)
-			logger.Info("persist message done.", zap.String("trunk file", fullname), zap.Duration("duration", dd), zap.Int("len", bufferedLen))
-		} else {
-			logger.Info("no message to persist.")
+			logger.Debug("persist message done.", zap.String("trunk file", fullname), zap.Duration("duration", dd), zap.Int("len", bufferedLen))
 		}
+		// else {
+		// logger.Info("no message to persist.")
+		// }
 
 		if !ok {
 			logger.Info("all process done. exit.")

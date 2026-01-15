@@ -155,7 +155,9 @@ func InitConfig(p Bootup) error {
 		vv := strings.SplitN(item, "=", 2)
 		if len(vv) == 2 {
 			k := strings.TrimSpace(vv[0])
+			k = strings.Trim(k, "\"'`")
 			v := strings.TrimSpace(vv[1])
+			v = strings.Trim(v, "\"'`")
 			os.Setenv(k, v)
 			log.Printf("set env %s = %s", k, v)
 		}

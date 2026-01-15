@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var LockerTimeout = time.Hour
+var LockerTimeout = 30 *time.Second//time.Hour
 
 type ScheduleLoker struct {
 	Locker  locker.Locker

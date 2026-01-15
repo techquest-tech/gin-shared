@@ -1,0 +1,78 @@
+package oss
+
+import (
+	"context"
+	"errors"
+	"log"
+	"os"
+	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	fs3 "github.com/fclairamb/afero-s3"
+	"github.com/spf13/afero"
+	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/storage"
+	"go.uber.org/zap"
+)
+
+type OssSettings struct {
+	Endpoint  string
+	AccessKey string
+	SecretKey string
+	Bucket    string
+	Region    string
+	Path      string
+}
+
+func init() {
+	storage.NamedFsService["oss"] = initSSO
+}
+
+func initSSO(key string) (afero.Fs, storage.Release, error) {
+	logger := zap.L()
+	settings := &OssSettings{}
+	err := viper.UnmarshalKey(key, settings)
+	if err != nil {
+		logger.Error("Failed to load OSS settings", zap.Error(err))
+		return nil, nil, err
+	}
+	if settings.Endpoint == "" {
+		logger.Info("try to load from ENV")
+		settings.Bucket = os.Getenv("OSS_BUCKET")
+		settings.AccessKey = os.Getenv("OSS_ID")
+		settings.SecretKey = os.Getenv("OSS_SECRET")
+		settings.Endpoint = os.Getenv("OSS_ENDPOINT")
+		settings.Region = os.Getenv("OSS_REGION")
+	}
+	if settings.Bucket == "" || settings.AccessKey == "" || settings.SecretKey == "" || settings.Endpoint == "" || settings.Region == "" {
+		logger.Error("OSS config missed, use regular file instead")
+		return nil, nil, errors.New("settings missed")
+	}
+	logger.Info("going to connect to oss", zap.String("endpoint", settings.Endpoint), zap.String("bucket", settings.Bucket), zap.String("path", settings.Path))
+	ctx := context.TODO()
+	if strings.HasPrefix(settings.Endpoint, "https://") {
+		settings.Endpoint = "http://" + settings.Endpoint
+	}
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(settings.AccessKey, settings.SecretKey, "")),
+		config.WithRegion(settings.Endpoint),
+	)
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
+
+	// Create S3 client with custom endpoint for Aliyun OSS
+	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(settings.Endpoint)
+		o.UsePathStyle = true // Required for Aliyun OSS path-style access
+	})
+
+	// Create the afero filesystem using the S3 client
+	s3Fs := fs3.NewFsFromClient(settings.Bucket, s3Client)
+	logger.Info("s3Fs created")
+	fs := afero.NewBasePathFs(s3Fs, settings.Path)
+	return fs, func() {}, nil
+}
