@@ -84,6 +84,7 @@ require (
 )
 
 require (
+	github.com/alexbrainman/odbc v0.0.0-20250601004241-49e6b2bc0cf0
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bsm/redislock v0.9.4
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
