@@ -1,3 +1,5 @@
+//go:build odbc || all
+
 package orm
 
 import (

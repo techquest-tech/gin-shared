@@ -1,19 +1,12 @@
 package oss
 
 import (
-	"context"
 	"errors"
-	"log"
 	"os"
-	"strings"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	fs3 "github.com/fclairamb/afero-s3"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
+	"github.com/techquest-tech/fsoss"
 	"github.com/techquest-tech/gin-shared/pkg/storage"
 	"go.uber.org/zap"
 )
@@ -52,27 +45,15 @@ func initSSO(key string) (afero.Fs, storage.Release, error) {
 		return nil, nil, errors.New("settings missed")
 	}
 	logger.Info("going to connect to oss", zap.String("endpoint", settings.Endpoint), zap.String("bucket", settings.Bucket), zap.String("path", settings.Path))
-	ctx := context.TODO()
-	if strings.HasPrefix(settings.Endpoint, "https://") {
-		settings.Endpoint = "http://" + settings.Endpoint
-	}
-	cfg, err := config.LoadDefaultConfig(ctx,
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(settings.AccessKey, settings.SecretKey, "")),
-		config.WithRegion(settings.Endpoint),
-	)
+
+	ossfs, err := fsoss.NewOssFs(settings.Endpoint, settings.AccessKey, settings.SecretKey, settings.Bucket)
 	if err != nil {
-		log.Fatalf("failed to load config: %v", err)
+		logger.Error("Failed to create OSS filesystem", zap.Error(err))
+		return nil, nil, err
 	}
 
-	// Create S3 client with custom endpoint for Aliyun OSS
-	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(settings.Endpoint)
-		o.UsePathStyle = true // Required for Aliyun OSS path-style access
-	})
+	fs := afero.NewBasePathFs(ossfs, settings.Path)
+	logger.Info("ossfs created", zap.String("bucket", settings.Bucket), zap.String("prefix", settings.Path))
 
-	// Create the afero filesystem using the S3 client
-	s3Fs := fs3.NewFsFromClient(settings.Bucket, s3Client)
-	logger.Info("s3Fs created")
-	fs := afero.NewBasePathFs(s3Fs, settings.Path)
 	return fs, func() {}, nil
 }
