@@ -1,4 +1,4 @@
-package sftp
+package storage
 
 import (
 	"fmt"
@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/afero"
 	"github.com/spf13/afero/sftpfs"
 	"github.com/spf13/viper"
-	"github.com/techquest-tech/gin-shared/pkg/storage"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
 )
@@ -22,10 +21,10 @@ type SftpSettings struct {
 }
 
 func init() {
-	storage.NamedFsService["sftp"] = InitSftpRoot
+	NamedFsService["sftp"] = InitSftpRoot
 }
 
-func InitSftpRoot(key string) (afero.Fs, storage.Release, error) {
+func InitSftpRoot(key string) (afero.Fs, Release, error) {
 	logger := zap.L()
 	settings := SftpSettings{}
 	err := viper.UnmarshalKey(key, &settings)

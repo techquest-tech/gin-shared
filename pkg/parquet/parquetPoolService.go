@@ -9,14 +9,15 @@ import (
 	"github.com/jinzhu/copier"
 	"github.com/parquet-go/parquet-go"
 	"github.com/samber/lo"
-	"github.com/spf13/afero"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/messaging"
+	"github.com/techquest-tech/gin-shared/pkg/storage"
 	"github.com/thanhpk/randstr"
 	"go.uber.org/zap"
 )
 
 type ParquetSetting struct {
+	FsKey           string // key for load FS settings
 	Folder          string
 	FilenamePattern string
 	BufferSize      int // settings for batch
@@ -50,11 +51,11 @@ func NewParquetDataServiceBySchema(setting *ParquetSetting, ss *parquet.Schema, 
 		Raw:     c,
 		Schema:  ss,
 	}
-	var err error
-	service.fs, err = core.CreateFs(setting.Folder)
-	if err != nil {
-		zap.L().Fatal("create fs failed", zap.Error(err))
-	}
+	// var err error
+	// service.fs, err = core.CreateFs(setting.Folder)
+	// if err != nil {
+	// 	zap.L().Fatal("create fs failed", zap.Error(err))
+	// }
 	return service
 }
 
@@ -76,11 +77,11 @@ func NewParquetDataServiceT[T any](settings *ParquetSetting, filenamePattern str
 		Schema:  parquet.SchemaOf(data),
 		// Event:   defaultEvent,
 	}
-	var err error
-	service.fs, err = core.CreateFs(clonedSettings.Folder)
-	if err != nil {
-		zap.L().Fatal("create fs failed.", zap.Error(err))
-	}
+	// var err error
+	// service.fs, err = core.CreateFs(clonedSettings.Folder)
+	// if err != nil {
+	// 	zap.L().Fatal("create fs failed.", zap.Error(err))
+	// }
 	return service
 }
 
@@ -90,7 +91,7 @@ type ParquetDataService struct {
 	Raw     chan any
 	Filter  func(msg []any) []any
 	// Event   PersistEvent
-	fs afero.Fs
+	// fs afero.Fs
 }
 
 // 生成文件名
@@ -118,6 +119,12 @@ func generateFileName(_, timestampformt string) (string, error) {
 }
 
 func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
+	fs, release, err := storage.CreateFs(p.Setting.FsKey)
+	if err != nil {
+		zap.L().Error("create fs failed.", zap.Error(err))
+		return "", err
+	}
+	defer release()
 
 	filename, err := generateFileName(p.Setting.Folder, p.Setting.FilenamePattern)
 	if err != nil {
@@ -146,12 +153,12 @@ func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
 
 	dir := filepath.Dir(filename)
 	if dir != "" {
-		err = core.EnsureDir(p.fs, dir)
+		err = storage.EnsureDir(fs, dir)
 		if err != nil {
 			return "", err
 		}
 	}
-	f, err := p.fs.Create(filename)
+	f, err := fs.Create(filename)
 	if err != nil {
 		logger.Error("create parquet file failed.", zap.Error(err))
 		return "", err
