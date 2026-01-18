@@ -1,4 +1,4 @@
-package oss
+package storage
 
 import (
 	"errors"
@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/fsoss"
-	"github.com/techquest-tech/gin-shared/pkg/storage"
 	"go.uber.org/zap"
 )
 
@@ -21,10 +20,11 @@ type OssSettings struct {
 }
 
 func init() {
-	storage.NamedFsService["oss"] = initSSO
+	NamedFsService["oss"] = initSSO
+	FsCacheEnabled["oss"] = true
 }
 
-func initSSO(key string) (afero.Fs, storage.Release, error) {
+func initSSO(key string) (afero.Fs, Release, error) {
 	logger := zap.L()
 	settings := &OssSettings{}
 	err := viper.UnmarshalKey(key, settings)
@@ -52,8 +52,13 @@ func initSSO(key string) (afero.Fs, storage.Release, error) {
 		return nil, nil, err
 	}
 
-	fs := afero.NewBasePathFs(ossfs, settings.Path)
-	logger.Info("ossfs created", zap.String("bucket", settings.Bucket), zap.String("prefix", settings.Path))
+	release := func() {}
 
-	return fs, func() {}, nil
+	logger.Info("ossfs created", zap.String("bucket", settings.Bucket), zap.String("prefix", settings.Path))
+	if settings.Path == "" {
+		return ossfs, release, nil
+	}
+	fs := afero.NewBasePathFs(ossfs, settings.Path)
+
+	return fs, release, nil
 }
