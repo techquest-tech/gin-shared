@@ -1,6 +1,9 @@
 package core
 
 import (
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -12,13 +15,24 @@ import (
 // Even Bus is good, but can't controll conconcurreny well and performance is not as good as chan,
 // target to replace all eventbus with chanAdaptor.
 type ChanAdaptor[T any] struct {
-	sender    chan T
-	receivers map[string]chan T
-	locker    sync.Mutex
-	Started   bool
+	sender       chan T
+	receivers    map[string]chan T
+	locker       sync.Mutex
+	Started      bool
+	DedupEnabled bool
+	DedupWindow  time.Duration
+	dedup        map[string]time.Time
+	dedupLock    sync.Mutex
 }
 
 type Handler[T any] func(data T) error
+
+func NewChanAdaptorWithDedupChecking[T any](buf int, dedupWindow time.Duration) *ChanAdaptor[T] {
+	rr := NewChanAdaptor[T](buf)
+	rr.DedupEnabled = true
+	rr.DedupWindow = dedupWindow
+	return rr
+}
 
 func NewChanAdaptor[T any](buf int) *ChanAdaptor[T] {
 	if buf == 0 {
@@ -28,6 +42,7 @@ func NewChanAdaptor[T any](buf int) *ChanAdaptor[T] {
 		sender:    make(chan T, buf),
 		receivers: make(map[string]chan T),
 		locker:    sync.Mutex{},
+		dedup:     make(map[string]time.Time),
 	}
 	OnServiceStarted(rr.Start)
 	OnServiceStopping(func() {
@@ -44,6 +59,29 @@ func NewChanAdaptor[T any](buf int) *ChanAdaptor[T] {
 }
 
 func (ca *ChanAdaptor[T]) Push(data T) {
+	if ca.DedupEnabled && ca.DedupWindow > 0 {
+		b, err := json.Marshal(data)
+		if err == nil {
+			sum := md5.Sum(b)
+			hash := hex.EncodeToString(sum[:])
+			now := time.Now()
+			ca.dedupLock.Lock()
+			for k, t := range ca.dedup {
+				if now.Sub(t) > ca.DedupWindow {
+					delete(ca.dedup, k)
+				}
+			}
+			if t, ok := ca.dedup[hash]; ok && now.Sub(t) <= ca.DedupWindow {
+				ca.dedupLock.Unlock()
+				ca.getLogger().Info("duplicate data skipped")
+				return
+			}
+			ca.dedup[hash] = now
+			ca.dedupLock.Unlock()
+		} else {
+			ca.getLogger().Error("marshal data error", zap.Error(err))
+		}
+	}
 	ca.sender <- data
 }
 
