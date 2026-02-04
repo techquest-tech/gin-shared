@@ -1,3 +1,5 @@
+//go:build !disable_mysql
+
 package orm
 
 import "gorm.io/driver/mysql"
