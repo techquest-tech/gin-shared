@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"html/template"
 	"net/smtp"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/jordan-wright/email"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -45,6 +49,10 @@ type EmailNotifer struct {
 func (en *EmailNotifer) PostInit() error {
 	if en.Logger == nil {
 		en.Logger = zap.L()
+	}
+
+	if en.SMTP.Host == "" {
+		viper.UnmarshalKey("smtp", &en.SMTP)
 	}
 
 	for _, item := range en.Template {
@@ -114,12 +122,26 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 	e.HTML = out.Bytes()
 
 	for _, file := range attachments {
-		_, err = e.AttachFile(file)
-		if err != nil {
-			en.Logger.Error("attach file failed", zap.String("file", file), zap.Error(err))
-			return err
+		if _, statErr := os.Stat(file); statErr != nil {
+			en.Logger.Error("attachment not found", zap.String("file", file), zap.Error(statErr))
+			return statErr
 		}
-		en.Logger.Info("attached file", zap.String("file", file))
+		att, attErr := e.AttachFile(file)
+		if attErr != nil {
+			en.Logger.Error("attach file failed", zap.String("file", file), zap.Error(attErr))
+			return attErr
+		}
+
+		if isImage(file) {
+			fileName := filepath.Base(file)
+			if att.Header != nil {
+				att.Header.Set("Content-ID", fmt.Sprintf("<%s>", fileName))
+				att.Header.Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
+			}
+			en.Logger.Info("attached inline image", zap.String("file", file), zap.String("cid", fileName))
+		} else {
+			en.Logger.Info("attached file", zap.String("file", file))
+		}
 	}
 	fullAddress := fmt.Sprintf("%s:%d", en.SMTP.Host, en.SMTP.Port)
 
@@ -143,4 +165,13 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 	}
 	en.Logger.Info("send email done.", zap.Strings("receivers", tmp.Receivers))
 	return nil
+}
+
+func isImage(filename string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff":
+		return true
+	}
+	return false
 }
