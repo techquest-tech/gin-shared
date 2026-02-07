@@ -13,10 +13,13 @@ import (
 	"go.uber.org/zap"
 )
 
-var ScheduleLockerEnabled = true
-var JobHistoryEnabled = true
-var ScheduleDisabled = false
-var JobRecoveryEnabled = true
+var (
+	// Deprecated: ScheduleLockerEnabled is deprecated and ignored.
+	ScheduleLockerEnabled = true
+	JobHistoryEnabled     = true
+	ScheduleDisabled      = false
+	JobRecoveryEnabled    = true
+)
 
 const (
 // StreamKey   = "gin-shared:jobs:stream"
@@ -61,6 +64,7 @@ func List() []string {
 }
 
 type ScheduleOptions struct {
+	// Deprecated: Nolocker is deprecated and ignored.
 	Nolocker  bool
 	NoGlobal  bool // ignore ScheduleDisabled
 	NoHistory bool

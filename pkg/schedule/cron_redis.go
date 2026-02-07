@@ -3,36 +3,31 @@
 package schedule
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"strings"
-	"sync/atomic"
-	"time"
-
 	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
-	"github.com/techquest-tech/gin-shared/pkg/locker"
 	"go.uber.org/zap"
 )
 
 var (
-	leaderID string
-	isLeader int32 // 0=false, 1=true
+	defaultLeaderElection *LeaderElection
 )
 
 func IsLeader() bool {
-	return atomic.LoadInt32(&isLeader) == 1
+	if defaultLeaderElection == nil {
+		return false
+	}
+	return defaultLeaderElection.IsLeader()
 }
 
 func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...ScheduleOptions) error {
-	err := core.GetContainer().Invoke(func(logger *zap.Logger, locker locker.Locker, redisClient *redis.Client) error {
+	err := core.GetContainer().Invoke(func(logger *zap.Logger, redisClient *redis.Client) error {
 		opt := &ScheduleOptions{}
 		if len(opts) > 0 {
 			opt = &opts[0]
 		}
 		// Consumer Logic: wrapped with Locker and History
-		fn := wrapFuncJob(jobname, locker, cmd, opt)
+		fn := wrapFuncJob(jobname, cmd, opt)
 
 		// Producer Logic: Directly execute if Leader
 		wrappedFn := func() {
@@ -63,63 +58,14 @@ func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...Sche
 
 func initScheduler(redisClient *redis.Client, logger *zap.Logger) (core.Startup, error) {
 	// Start Leader Election
-	startLeaderElection(redisClient, logger)
+	config := &LeaderElectionConfig{}
+	if err := viper.UnmarshalKey("schedule.leader", config); err != nil {
+		logger.Warn("load schedule.leader config failed, use default", zap.Error(err))
+	}
+
+	defaultLeaderElection = NewLeaderElection(redisClient, logger, config)
+	defaultLeaderElection.Start()
 	return nil, nil
-}
-
-func startLeaderElection(client *redis.Client, logger *zap.Logger) {
-	hostname, _ := os.Hostname()
-	leaderID = fmt.Sprintf("%s-%d", hostname, time.Now().UnixNano())
-	logger.Info("starting leader election", zap.String("candidateID", leaderID))
-
-	go func() {
-		ticker := time.NewTicker(3 * time.Second)
-		leaderKey := "scheduler:leader"
-		if core.AppName != "" {
-			safeAppName := strings.ReplaceAll(core.AppName, " ", "-")
-			leaderKey = fmt.Sprintf("scheduler:%s:leader", safeAppName)
-		}
-		leaderTTL := 10 * time.Second
-
-		for range ticker.C {
-			ctx := context.Background()
-
-			// 1. Try to become leader
-			ok, err := client.SetNX(ctx, leaderKey, leaderID, leaderTTL).Result()
-			if err != nil {
-				logger.Error("leader election error", zap.Error(err))
-				continue
-			}
-
-			if ok {
-				// Won election
-				if atomic.CompareAndSwapInt32(&isLeader, 0, 1) {
-					logger.Info("I am the leader now", zap.String("id", leaderID))
-				}
-				continue
-			}
-
-			// 2. If not won, check if I am already the leader (renew lease)
-			val, err := client.Get(ctx, leaderKey).Result()
-			if err != nil {
-				logger.Error("leader check error", zap.Error(err))
-				continue
-			}
-
-			if val == leaderID {
-				// Renew lease
-				client.Expire(ctx, leaderKey, leaderTTL)
-				if atomic.CompareAndSwapInt32(&isLeader, 0, 1) {
-					logger.Info("I am the leader now (recovered)", zap.String("id", leaderID))
-				}
-			} else {
-				// Someone else is leader
-				if atomic.CompareAndSwapInt32(&isLeader, 1, 0) {
-					logger.Info("I am no longer the leader", zap.String("new_leader", val))
-				}
-			}
-		}
-	}()
 }
 
 func init() {

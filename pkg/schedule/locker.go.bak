@@ -3,17 +3,13 @@ package schedule
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/robfig/cron/v3"
-	"github.com/spf13/viper"
-	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/locker"
 	"go.uber.org/zap"
 )
 
-var LockerTimeout = 30 *time.Second//time.Hour
-
+// Deprecated: ScheduleLoker is deprecated. Use CreateScheduledJob instead.
 type ScheduleLoker struct {
 	Locker  locker.Locker
 	Jobname string
@@ -21,6 +17,7 @@ type ScheduleLoker struct {
 
 var errlockerFailed = errors.New("get locker failed")
 
+// Deprecated: Wrapper is deprecated. Use CreateScheduledJob instead.
 func (sl *ScheduleLoker) Wrapper() cron.JobWrapper {
 	return func(j cron.Job) cron.Job {
 		return cron.FuncJob(func() {
@@ -41,15 +38,4 @@ func (sl *ScheduleLoker) Wrapper() cron.JobWrapper {
 			// logger.Info("job done.", zap.Duration("duration", dur))
 		})
 	}
-}
-
-func init() {
-	core.ProvideStartup(func(logger *zap.Logger) core.Startup {
-		dur := viper.GetDuration("locker.timeout")
-		if dur > 0 {
-			LockerTimeout = dur
-			logger.Info("set default cronjob locker timeout", zap.Duration("locker", LockerTimeout))
-		}
-		return nil
-	})
 }

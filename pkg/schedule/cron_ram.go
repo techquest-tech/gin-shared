@@ -4,7 +4,6 @@ package schedule
 
 import (
 	"github.com/techquest-tech/gin-shared/pkg/core"
-	"github.com/techquest-tech/gin-shared/pkg/locker"
 	"go.uber.org/zap"
 )
 
@@ -15,13 +14,7 @@ func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...Sche
 			opt = &opts[0]
 		}
 
-		// Force Nolocker in RAM mode as requested
-		opt.Nolocker = true
-
-		// We pass nil for locker service because Nolocker is true, so it won't be used.
-		var lockerService locker.Locker = nil
-
-		fn := wrapFuncJob(jobname, lockerService, cmd, opt)
+		fn := wrapFuncJob(jobname, cmd, opt)
 
 		// In RAM mode, Producer == Consumer == fn
 		return startCron(jobname, schedule, fn, fn, logger, opt)
@@ -32,6 +25,6 @@ func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...Sche
 	return err
 }
 
-func StartStreamWorker() {
-	// No-op for RAM mode
-}
+// func StartStreamWorker() {
+// 	// No-op for RAM mode
+// }
