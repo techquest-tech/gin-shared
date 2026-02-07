@@ -10,7 +10,7 @@ Designed for high availability in Kubernetes/Cluster environments. It ensures th
 *   **Mechanism**:
     *   **Leader Election**: All Pods compete to become the leader using a Redis Lock (`SetNX` with TTL). The election Key is scoped by `core.AppName` to support multi-tenant Redis sharing.
     *   **Leader-Only Execution**: Only the elected Leader Pod will trigger and execute the cron tasks. Non-leader Pods remain in standby.
-    *   **Failover**: The Leader periodically renews its lease. If the Leader Pod crashes, the lease expires (TTL 10s), and a standby Pod is automatically elected as the new Leader to resume operations.
+    *   **Failover**: The Leader periodically renews its lease. If the Leader Pod crashes, the lease expires (default TTL 10s), and a standby Pod is automatically elected as the new Leader to resume operations.
 *   **Dependencies**: Requires Redis.
 
 ### 2. RAM Mode (Simple)
@@ -40,6 +40,16 @@ go build ./...
 
 **Configuration**:
 The module automatically registers a startup hook (`core.ProvideStartup`) to start the leader election process when the application starts. No manual invocation is needed if you use `ginshared.Start()`.
+
+You can configure the Leader Election parameters via your application configuration (e.g., `app.yaml`):
+
+```yaml
+schedule:
+  leader:
+    interval: 3s       # Election check interval (default: 3s)
+    ttl: 10s           # Leader key validity period (default: 10s)
+    key: "my-leader"   # Optional: Override redis key (default: scheduler:<AppName>:leader)
+```
 
 **Code Example**:
 

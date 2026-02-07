@@ -10,7 +10,7 @@
 *   **机制**：
     *   **Leader 选举 (Leader Election)**：所有的 Pods 通过 Redis 锁（`SetNX` + TTL）竞争成为 Leader。选举 Key 包含 `core.AppName` 以支持多租户共享 Redis。
     *   **仅 Leader 执行 (Leader-Only Execution)**：只有当选的 Leader Pod 会触发并执行定时任务。非 Leader Pods 保持待命状态。
-    *   **故障转移 (Failover)**：Leader 会定期续租。如果 Leader Pod 崩溃，租约过期（TTL 10秒）后，备用 Pod 会自动被选举为新 Leader 并恢复运行。
+    *   **故障转移 (Failover)**：Leader 会定期续租。如果 Leader Pod 崩溃，租约过期（默认 TTL 10秒）后，备用 Pod 会自动被选举为新 Leader 并恢复运行。
 *   **依赖**：需要 Redis。
 
 ### 2. RAM 模式（简单）
@@ -40,6 +40,16 @@ go build ./...
 
 **配置**：
 本模块会自动注册启动钩子 (`core.ProvideStartup`)，在应用启动时开启 Leader 选举流程。如果你使用 `ginshared.Start()`，则无需手动调用。
+
+你可以通过应用配置（如 `app.yaml`）调整 Leader 选举参数：
+
+```yaml
+schedule:
+  leader:
+    interval: 3s       # 选举检查间隔 (默认: 3s)
+    ttl: 10s           # Leader Key 有效期 (默认: 10s)
+    key: "my-leader"   # 可选: 覆盖 Redis Key (默认: scheduler:<AppName>:leader)
+```
 
 **代码示例**：
 
