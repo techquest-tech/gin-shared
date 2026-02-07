@@ -19,9 +19,9 @@ var ScheduleDisabled = false
 var JobRecoveryEnabled = true
 
 const (
-	StreamKey   = "gin-shared:jobs:stream"
-	GroupKey    = "gin-shared:jobs:group"
-	ConsumerKey = "consumer"
+// StreamKey   = "gin-shared:jobs:stream"
+// GroupKey    = "gin-shared:jobs:group"
+// ConsumerKey = "consumer"
 )
 
 func CheckIfEnabled() cron.JobWrapper {
@@ -99,10 +99,10 @@ func CreateSchedule(jobname, schedule string, cmd func(), opts ...ScheduleOption
 }
 
 // startCron is a helper to start the cron job.
-// It assumes producerFn is the function to be scheduled by Cron (trigger).
-// It assumes consumerFn is the function to be executed (logic), stored in jobs map.
-func startCron(jobname, schedule string, producerFn func(), consumerFn func(), logger *zap.Logger, opt *ScheduleOptions) error {
-	jobs[jobname] = consumerFn
+// It assumes cronTriggerFn is the function to be scheduled by Cron (trigger).
+// It assumes manualTriggerFn is the function to be executed (logic), stored in jobs map.
+func startCron(jobname, schedule string, cronTriggerFn func(), manualTriggerFn func(), logger *zap.Logger, opt *ScheduleOptions) error {
+	jobs[jobname] = manualTriggerFn
 
 	if (ScheduleDisabled && !opt.NoGlobal) || schedule == "" || schedule == "-" {
 		logger.Info("cronjob is disabled.", zap.String("job", jobname))
@@ -129,7 +129,7 @@ func startCron(jobname, schedule string, producerFn func(), consumerFn func(), l
 			go func() {
 				for range ticker.C {
 					zap.L().Debug("ticker ticking", zap.String("job", jobname), zap.Duration("duration", dur))
-					producerFn()
+					cronTriggerFn()
 					zap.L().Debug("ticker ticked", zap.String("job", jobname))
 				}
 			}()
@@ -139,7 +139,7 @@ func startCron(jobname, schedule string, producerFn func(), consumerFn func(), l
 
 	cr := cron.New(cron.WithChain(chain...))
 
-	item, err := cr.AddFunc(schedule, producerFn)
+	item, err := cr.AddFunc(schedule, cronTriggerFn)
 	if err != nil {
 		logger.Error("add job failed", zap.Error(err))
 		return err
@@ -152,7 +152,7 @@ func startCron(jobname, schedule string, producerFn func(), consumerFn func(), l
 		EntryID:  item,
 		Name:     jobname,
 		Schedule: schedule,
-		Fn:       producerFn,
+		Fn:       cronTriggerFn,
 	}
 	jobMux.Unlock()
 

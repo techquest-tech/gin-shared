@@ -5,13 +5,12 @@ This module provides a robust cron job scheduling mechanism with support for bot
 ## Features
 
 ### 1. Distributed Scheduling (Default)
-Designed for high availability in Kubernetes/Cluster environments. It solves the problem where a specific Pod failure could lead to missed tasks.
+Designed for high availability in Kubernetes/Cluster environments. It ensures that tasks are executed exactly once across the cluster by restricting execution to a single "Leader" Pod.
 
 *   **Mechanism**:
-    *   **Decoupled Trigger & Execution**: The scheduling (Cron) and execution are decoupled using **Redis Stream**.
-    *   **Trigger Phase**: All Pods attempt to trigger the task. A `SetNX` lock ensures only one "Trigger Event" is produced per schedule time (deduplicated by minute).
-    *   **Execution Phase**: A Consumer Group worker pool (running on all Pods) listens to the stream. Only one healthy Pod will claim and execute the task.
-    *   **Failover**: If the executing Pod crashes, the message remains "Pending". Other healthy Pods will detect and reclaim (Claim) the message after a timeout, ensuring the task is eventually executed.
+    *   **Leader Election**: All Pods compete to become the leader using a Redis Lock (`SetNX` with TTL). The election Key is scoped by `core.AppName` to support multi-tenant Redis sharing.
+    *   **Leader-Only Execution**: Only the elected Leader Pod will trigger and execute the cron tasks. Non-leader Pods remain in standby.
+    *   **Failover**: The Leader periodically renews its lease. If the Leader Pod crashes, the lease expires (TTL 10s), and a standby Pod is automatically elected as the new Leader to resume operations.
 *   **Dependencies**: Requires Redis.
 
 ### 2. RAM Mode (Simple)
@@ -27,7 +26,7 @@ The module uses Golang Build Tags to switch implementation details at compile ti
 
 | Mode | Build Tag | Features | Concurrent Control |
 | :--- | :--- | :--- | :--- |
-| **Default** | `!ram` | Redis Stream, Redis Lock, Job History | Yes (Distributed) |
+| **Default** | `!ram` | Leader Election, Redis Lock, Job History | Yes (Distributed Leader) |
 | **RAM** | `ram` | Local Cron | No (None) |
 
 ## Usage
@@ -40,9 +39,9 @@ go build ./...
 ```
 
 **Configuration**:
-The module automatically registers a startup hook (`core.ProvideStartup`) to launch the stream worker when the application starts. No manual invocation is needed if you use `ginshared.Start()`.
+The module automatically registers a startup hook (`core.ProvideStartup`) to start the leader election process when the application starts. No manual invocation is needed if you use `ginshared.Start()`.
 
-If you are not using `ginshared.Start()`, you can manually start the worker:
+**Code Example**:
 
 ```go
 import "github.com/techquest-tech/gin-shared/pkg/schedule"
@@ -51,10 +50,10 @@ func main() {
     // ... init redis ...
     
     // Define tasks
-    schedule.CreateSchedule("my-task", "*/1 * * * *", myFunc)
+    schedule.CreateScheduledJob("my-task", "*/1 * * * *", myFunc)
     
-    // Manually start if not using standard bootstrap
-    schedule.StartStreamWorker()
+    // Start application (Leader Election starts automatically)
+    ginshared.Start()
 }
 ```
 
