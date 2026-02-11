@@ -60,11 +60,22 @@ func wrapFuncJob(jobname string, fn func() error, opt *ScheduleOptions) cron.Fun
 					provider.SetJobhistory(task)
 				}
 			}()
-			err = fn()
-			if err != nil {
-				logger.Error("run job failed", zap.Error(err))
-				task.Succeed = false
-				task.Message = err.Error()
+			for i := 0; i <= opt.RetryTimes; i++ {
+				err = fn()
+				if err == nil {
+					break
+				}
+
+				if i < opt.RetryTimes {
+					logger.Warn("job failed, retrying...", zap.Error(err), zap.Int("attempt", i+1), zap.Int("max_retry", opt.RetryTimes))
+					if opt.RetryWait > 0 {
+						time.Sleep(opt.RetryWait)
+					}
+				} else {
+					logger.Error("run job failed", zap.Error(err))
+					task.Succeed = false
+					task.Message = err.Error()
+				}
 			}
 		})
 }
