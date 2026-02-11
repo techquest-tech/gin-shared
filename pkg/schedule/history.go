@@ -3,7 +3,6 @@ package schedule
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"runtime"
 	"time"
@@ -112,14 +111,8 @@ func Withhistory(jobname string) cron.JobWrapper {
 				defer func() {
 					if r := recover(); r != nil {
 						if err, ok := r.(error); ok {
-							if errors.Is(err, errlockerFailed) {
-								logger.Info("job cancelled, another job might be running", zap.Error(err))
-								return
-							} else {
-								task.Message = err.Error()
-								logger.Error("recover from panic", zap.Error(err), zap.String("job", task.Job))
-							}
-
+							task.Message = err.Error()
+							logger.Error("recover from panic", zap.Error(err), zap.String("job", task.Job))
 						} else if msg, ok := r.(string); ok {
 							task.Message = msg
 							logger.Info(msg)
