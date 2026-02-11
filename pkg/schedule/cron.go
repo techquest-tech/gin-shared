@@ -65,9 +65,11 @@ func List() []string {
 
 type ScheduleOptions struct {
 	// Deprecated: Nolocker is deprecated and ignored.
-	Nolocker  bool
-	NoGlobal  bool // ignore ScheduleDisabled
-	NoHistory bool
+	Nolocker   bool
+	NoGlobal   bool // ignore ScheduleDisabled
+	NoHistory  bool
+	RetryTimes int
+	RetryWait  time.Duration
 }
 
 type ScheduledJob struct {

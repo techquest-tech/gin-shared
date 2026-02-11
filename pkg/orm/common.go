@@ -30,7 +30,8 @@ func (p *PagingResult[T]) Trigger(tx *gorm.DB, req QueryBase) error {
 
 	if req.PageSize > 0 {
 		total := int64(0)
-		err := tx.Count(&total).Error
+		var t T
+		err := tx.Model(t).Count(&total).Error
 		if err != nil {
 			zap.L().Error("count total failed.", zap.Error(err))
 			return err
@@ -42,7 +43,7 @@ func (p *PagingResult[T]) Trigger(tx *gorm.DB, req QueryBase) error {
 		tx = tx.Limit(req.PageSize).Offset(req.Page * req.PageSize)
 	}
 
-	err := tx.Debug().Find(&result).Error
+	err := tx.Find(&result).Error
 	if err != nil {
 		zap.L().Error("query task details failed.", zap.Error(err))
 		return err
