@@ -86,12 +86,17 @@ func Start() error {
 	return core.Container.Invoke(func(p Params) (err error) {
 		viper.SetDefault(KeyAddress, ":5001")
 		viper.SetDefault(KeyShutdown, 3*time.Second)
+		viper.SetDefault("static.folder", "static")
 
 		// check if have static folder, if yes, enabled the static router
-		info, err := os.Stat("static")
-		if err == nil && info.IsDir() {
-			p.Router.Static("/", "static")
-			p.Logger.Info("static router enabled.")
+		staticFolder := viper.GetString("static.folder")
+		enableStatic := viper.GetBool("static.enabled")
+		if enableStatic {
+			info, err := os.Stat(staticFolder)
+			if err == nil && info.IsDir() {
+				p.Router.Static("/", staticFolder)
+				p.Logger.Info("static router enabled.")
+			}
 		}
 
 		address := viper.GetString(KeyAddress)
