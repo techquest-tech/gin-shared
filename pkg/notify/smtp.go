@@ -32,6 +32,7 @@ type EmailTmpl struct {
 	Receivers    []string
 	CcReceivers  []string
 	BccReceivers []string
+	ReplyTo      []string
 	tSub         *template.Template
 	tBody        *template.Template
 	// tNotfound *template.Template
@@ -72,6 +73,10 @@ func (en *EmailNotifer) PostInit() error {
 }
 
 func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachments ...string) error {
+	return en.SendTo(tmpl, nil, nil, nil, data, attachments...)
+}
+
+func (en *EmailNotifer) SendTo(tmpl string, to []string, cc []string, bcc []string, data map[string]interface{}, attachments ...string) error {
 	en.Once.Do(func() {
 		err := en.PostInit()
 		if err != nil {
@@ -81,7 +86,6 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 	e := email.NewEmail()
 
 	e.From = en.From
-	//e.To = en.Receivers
 
 	out := bytes.Buffer{}
 
@@ -91,34 +95,39 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 	}
 	en.Logger.Debug("template", zap.String("tmpl", tmpl))
 	en.Logger.Debug("template is ", zap.Any("", tmp))
-	e.To = tmp.Receivers
-	e.Cc = tmp.CcReceivers
-	e.Bcc = tmp.BccReceivers
+
+	if len(to) > 0 {
+		e.To = to
+	} else {
+		e.To = tmp.Receivers
+	}
+	if len(cc) > 0 {
+		e.Cc = cc
+	} else {
+		e.Cc = tmp.CcReceivers
+	}
+	if len(bcc) > 0 {
+		e.Bcc = bcc
+	} else {
+		e.Bcc = tmp.BccReceivers
+	}
+	if len(tmp.ReplyTo) > 0 {
+		e.ReplyTo = tmp.ReplyTo
+	}
 
 	err := tmp.tSub.Execute(&out, data)
 	if err != nil {
 		en.Logger.Error("match email subject failed.", zap.Error(err))
 		return err
 	}
-
 	e.Subject = out.String()
 
 	out = bytes.Buffer{}
-
-	// if attachments != nil {
 	err = tmp.tBody.Execute(&out, data)
 	if err != nil {
 		en.Logger.Error("match email content failed.", zap.Error(err))
 		return err
 	}
-	// } else {
-	// 	err = tmp.tNotfound.Execute(&out, data)
-	// 	if err != nil {
-	// 		en.Logger.Error("match email content failed.", zap.Error(err))
-	// 		return err
-	// 	}
-	// }
-	// e.Text = out.Bytes()
 	e.HTML = out.Bytes()
 
 	for _, file := range attachments {
@@ -146,7 +155,7 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 	fullAddress := fmt.Sprintf("%s:%d", en.SMTP.Host, en.SMTP.Port)
 
 	en.Logger.Debug("start to send email", zap.String("smtp", fullAddress),
-		zap.Strings("receivers", tmp.Receivers),
+		zap.Strings("receivers", e.To),
 		zap.Bool("TLS", en.SMTP.Tls),
 	)
 	if en.SMTP.Tls {
@@ -154,16 +163,15 @@ func (en *EmailNotifer) Send(tmpl string, data map[string]interface{}, attachmen
 			InsecureSkipVerify: true,
 			ServerName:         en.SMTP.Host,
 		})
-		// err = e.SendWithStartTLS(fullAddress, en.SMTP.auth, &tls.Config{})
 	} else {
 		err = e.Send(fullAddress, en.SMTP.auth)
 	}
 
 	if err != nil {
-		en.Logger.Error("send email failed", zap.Error(err), zap.Strings("receivers", tmp.Receivers))
+		en.Logger.Error("send email failed", zap.Error(err), zap.Strings("receivers", e.To))
 		return err
 	}
-	en.Logger.Info("send email done.", zap.Strings("receivers", tmp.Receivers))
+	en.Logger.Info("send email done.", zap.Strings("receivers", e.To))
 	return nil
 }
 

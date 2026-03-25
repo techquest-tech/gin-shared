@@ -84,6 +84,32 @@ func (h *HashEx[T]) SetValues(ctx context.Context, key string, values map[string
 	return h.data.SetValues(ctx, key, data)
 }
 
+func (h *HashEx[T]) GetAll(ctx context.Context, key string) (map[string]T, error) {
+	rawMap, err := h.data.GetAll(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]T, len(rawMap))
+	for k, cache := range rawMap {
+		var t T
+		// Attempt to unmarshal or convert directly
+		if err := json.Unmarshal([]byte(cache), &t); err != nil {
+			// If not json, and T is string, we can just assign it
+			if _, ok := any(t).(string); ok {
+				var v any = cache
+				result[k] = v.(T)
+			} else {
+				zap.L().Error("unmarshal map value failed", zap.Error(err), zap.String("key", k))
+				continue
+			}
+		} else {
+			result[k] = t
+		}
+	}
+	return result, nil
+}
+
 func NewHashEx[T any]() *HashEx[T] {
 	var result *HashEx[T]
 	core.GetContainer().Invoke(func(hash Hash) {

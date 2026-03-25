@@ -10,6 +10,12 @@ import (
 )
 
 func TestSSEmail(t *testing.T) {
+	if os.Getenv("RUN_SMTP_TEST") != "1" {
+		t.Skip("smtp test disabled")
+	}
+	if os.Getenv("SMTP_PWD") == "" {
+		t.Skip("SMTP_PWD is empty")
+	}
 	n := &notify.EmailNotifer{
 		Logger: zap.L(),
 		From:   "tech_support@summation.solutions",

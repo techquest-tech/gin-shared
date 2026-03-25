@@ -67,6 +67,15 @@ func (rs *RedisHashService) SetValues(ctx context.Context, key string, values ma
 	return nil
 }
 
+func (rs *RedisHashService) GetAll(ctx context.Context, key string) (map[string]string, error) {
+	resp, err := rs.Client.HGetAll(ctx, key).Result()
+	if err != nil {
+		rs.Logger.Error("failed to get all values from redis", zap.Error(err))
+		return nil, err
+	}
+	return resp, nil
+}
+
 func init() {
 	core.Provide(NewRedisHashService)
 }
