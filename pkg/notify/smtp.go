@@ -98,8 +98,9 @@ func (en *EmailNotifer) SendTo(tmpl string, to []string, cc []string, bcc []stri
 
 	if len(to) > 0 {
 		e.To = to
-	} else {
-		e.To = tmp.Receivers
+	}
+	if len(tmp.Receivers) > 0 {
+		e.To = append(e.To, tmp.Receivers...)
 	}
 	if len(cc) > 0 {
 		e.Cc = cc
