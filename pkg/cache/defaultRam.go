@@ -54,30 +54,9 @@ func (lhash *LocalRamHash) GetAll(ctx context.Context, key string) (map[string]s
 			field := kStr[len(key):]
 			if vStr, ok := v.(string); ok {
 				result[field] = vStr
-			}
-		}
-		return true
-	})
-	return result, nil
-}
-
-func NewLocalRamHash() Hash {GetAll(ctx context.Context, key string) (map[string]string, error) {
-	// Not fully supported by sync.Map without iterating over all keys and matching prefix.
-	// Returning empty map or implementing prefix scan.
-	result := make(map[string]string)
-	lhash.ram.Range(func(k, v any) bool {
-		kStr, ok := k.(string)
-		if ok && len(kStr) > len(key) && kStr[:len(key)] == key {
-			field := kStr[len(key):]
-			if vStr, ok := v.(string); ok {
-				result[field] = vStr
 			} else {
-				// try to format to string if it's not string
 				if stringer, ok := v.(interface{ String() string }); ok {
 					result[field] = stringer.String()
-				} else {
-					// Fallback: you might want to skip or use fmt.Sprint(v)
-					// Here we just skip non-string values or you can use fmt.Sprint(v)
 				}
 			}
 		}
