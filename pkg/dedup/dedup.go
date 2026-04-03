@@ -1,4 +1,4 @@
-package orm
+package dedup
 
 import (
 	"crypto/md5"
@@ -102,7 +102,6 @@ func BuildObjectMD5(obj any) (string, error) {
 var ServiceObjectFingerprint *ObjectFingerprintService
 
 func init() {
-	AppendEntity(ObjectFingerprint{})
 	core.Provide(NewObjectFingerprintService)
 	core.ProvideStartup(func(s *ObjectFingerprintService) core.Startup {
 		ServiceObjectFingerprint = s
