@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/techquest-tech/gin-shared/pkg/core"
@@ -79,6 +80,51 @@ func (s *ObjectFingerprintService) IsDuplicated(objectKey string, objectName str
 		return false, fmt.Errorf("load dedup record failed key=%s name=%s: %w", objectKey, objectName, err)
 	}
 	return item.MD5 == current, nil
+}
+
+func (s *ObjectFingerprintService) CheckAndSave(objectKey string, objectName string, obj any) (bool, error) {
+	current, err := BuildObjectMD5(obj)
+	if err != nil {
+		return false, fmt.Errorf("build md5 failed key=%s name=%s: %w", objectKey, objectName, err)
+	}
+	duplicated := false
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		item := &ObjectFingerprint{}
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("object_key = ? and object_name = ?", objectKey, objectName).
+			First(item).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				createErr := tx.Create(&ObjectFingerprint{
+					ObjectKey:  objectKey,
+					ObjectName: objectName,
+					MD5:        current,
+				}).Error
+				if createErr != nil {
+					return fmt.Errorf("create dedup record failed key=%s name=%s: %w", objectKey, objectName, createErr)
+				}
+				return nil
+			}
+			return fmt.Errorf("load dedup record failed key=%s name=%s: %w", objectKey, objectName, err)
+		}
+		if item.MD5 == current {
+			duplicated = true
+			return nil
+		}
+		updateErr := tx.Model(&ObjectFingerprint{}).Where("id = ?", item.ID).Updates(map[string]any{
+			"md5":        current,
+			"updated_at": gorm.Expr("now()"),
+			"deleted_at": nil,
+		}).Error
+		if updateErr != nil {
+			return fmt.Errorf("update dedup record failed key=%s name=%s: %w", objectKey, objectName, updateErr)
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return duplicated, nil
 }
 
 func BuildObjectMD5(obj any) (string, error) {
