@@ -17,7 +17,15 @@ var InitDBCmd = &cobra.Command{
 	Use:   "initDB",
 	Short: "init tables",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cleanViews, _ := cmd.Flags().GetStringSlice("cleanViews")
+
 		return core.Container.Invoke(func(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus) {
+			if len(cleanViews) > 0 {
+				err := orm.CleanViews(db, logger, cleanViews)
+				if err != nil {
+					logger.Error("clean views failed", zap.Error(err))
+				}
+			}
 			orm.MigrateTableAndView(db, logger, bus)
 		})
 	},
@@ -25,6 +33,7 @@ var InitDBCmd = &cobra.Command{
 
 func init() {
 	// rootCmd.AddCommand(initDBCmd)
+	InitDBCmd.Flags().StringSliceP("cleanViews", "c", []string{}, "Clean specified views before migration. Use '*' to clean all pending views.")
 
 	// Here you will define your flags and configuration settings.
 

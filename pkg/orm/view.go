@@ -23,6 +23,62 @@ var ReplaceTablePrefix = core.ReplaceTablePrefix
 
 const ViewMysqlTmp = "CREATE OR REPLACE ALGORITHM = UNDEFINED VIEW %s%s AS %s"
 
+func CleanViews(tx *gorm.DB, logger *zap.Logger, viewsToClean []string) error {
+	if len(viewsToClean) == 0 {
+		return nil
+	}
+
+	dbSettings := viper.Sub("database")
+	if dbSettings == nil {
+		return nil
+	}
+
+	tablePrefix := dbSettings.GetString("tablePrefix")
+	viewSettings := dbSettings.Sub("views")
+	if viewSettings == nil {
+		return nil
+	}
+
+	cleanAll := false
+	for _, v := range viewsToClean {
+		if v == "*" {
+			cleanAll = true
+			break
+		}
+	}
+
+	targetViews := make(map[string]bool)
+	if !cleanAll {
+		for _, v := range viewsToClean {
+			targetViews[v] = true
+		}
+	}
+
+	errs := make([]error, 0)
+	for _, key := range viewSettings.AllKeys() {
+		if !cleanAll && !targetViews[key] {
+			continue
+		}
+
+		viewName := tablePrefix + key
+		// Some databases might not support IF EXISTS in DROP VIEW, but most modern ones do (MySQL, Postgres, SQL Server etc.)
+		dropSql := fmt.Sprintf("DROP VIEW IF EXISTS %s", viewName)
+		
+		err := tx.Exec(dropSql).Error
+		if err != nil {
+			logger.Error("drop view failed", zap.Error(err), zap.String("view", key), zap.String("viewName", viewName))
+			errs = append(errs, err)
+			continue
+		}
+		logger.Info("drop view done", zap.String("view", key), zap.String("viewName", viewName))
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("clean views failed: %v", errs)
+	}
+	return nil
+}
+
 func InitMysqlViews(tx *gorm.DB, logger *zap.Logger) error {
 
 	dbSettings := viper.Sub("database")
