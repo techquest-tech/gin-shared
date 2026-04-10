@@ -31,7 +31,23 @@ func ApplyMigrate() error {
 	return core.GetContainer().Invoke(migrateFN)
 }
 
-func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus) {
+func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus, cleanViews ...string) {
+	dialect := ""
+	if db != nil && db.Dialector != nil {
+		dialect = db.Dialector.Name()
+	}
+
+	viewsToClean := cleanViews
+	if dialect == "postgres" && len(viewsToClean) == 0 {
+		viewsToClean = []string{"*"}
+	}
+	if len(viewsToClean) > 0 {
+		err := CleanViews(db, logger, viewsToClean)
+		if err != nil {
+			logger.Error("clean views failed", zap.Error(err))
+		}
+	}
+
 	logger.Info("init all tables")
 
 	for _, item := range entities {
@@ -57,5 +73,6 @@ func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus) {
 }
 
 func init() {
+	// TODO: should check if db if empty, might error when service bootup, should init when connect to DB.
 	core.InvokeAsyncOnServiceStarted(migrateFN)
 }
