@@ -55,15 +55,20 @@ func CleanViews(tx *gorm.DB, logger *zap.Logger, viewsToClean []string) error {
 	}
 
 	errs := make([]error, 0)
+	dialect := ""
+	if tx != nil && tx.Dialector != nil {
+		dialect = tx.Dialector.Name()
+	}
 	for _, key := range viewSettings.AllKeys() {
 		if !cleanAll && !targetViews[key] {
 			continue
 		}
 
 		viewName := tablePrefix + key
-		// Some databases might not support IF EXISTS in DROP VIEW, but most modern ones do (MySQL, Postgres, SQL Server etc.)
 		dropSql := fmt.Sprintf("DROP VIEW IF EXISTS %s", viewName)
-		
+		if dialect == "postgres" {
+			dropSql = fmt.Sprintf("DROP VIEW IF EXISTS %s CASCADE", viewName)
+		}
 		err := tx.Exec(dropSql).Error
 		if err != nil {
 			logger.Error("drop view failed", zap.Error(err), zap.String("view", key), zap.String("viewName", viewName))
