@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/techquest-tech/gin-shared/pkg/core"
+	"github.com/techquest-tech/gin-shared/pkg/orm"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -148,6 +149,7 @@ func BuildObjectMD5(obj any) (string, error) {
 var ServiceObjectFingerprint *ObjectFingerprintService
 
 func init() {
+	orm.AppendEntity(ObjectFingerprint{})
 	core.Provide(NewObjectFingerprintService)
 	core.ProvideStartup(func(s *ObjectFingerprintService) core.Startup {
 		ServiceObjectFingerprint = s
