@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var MaxLockerDuration time.Duration = 30 * time.Second
+var MaxLockerDuration time.Duration = 3 * time.Minute
 var WaitInteval time.Duration = 50 * time.Millisecond
 
 const (
@@ -59,7 +59,7 @@ func (r *RedisLocker) WaitForLocker(ctx context.Context, resource string, maxWai
 		err := lock.Release(context.Background())
 		if err != nil {
 			ll.Error("release locker failed. try to delete it", zap.Error(err))
-			err = r.client.Del(context.Background(), resource).Err()
+			err = r.client.Del(context.Background(), LockerPrefix+resource).Err()
 			if err != nil {
 				ll.Error("delete locker failed", zap.Error(err))
 				return err

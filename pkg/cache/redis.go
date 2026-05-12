@@ -226,7 +226,7 @@ func (r *RedisProvider[T]) Get(key string) (T, bool) {
 				return value, false
 			}
 			r := *vv
-			zap.L().Debug("read value from redis done", zap.String("key", k), zap.Any("value", r))
+			zap.L().Debug("read value from redis done", zap.String("key", k))
 			return r, true
 		}
 	}
