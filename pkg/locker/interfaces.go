@@ -2,8 +2,11 @@ package locker
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+var ErrLocked = errors.New("locker: resource locked")
 
 type Locker interface {
 	Lock(ctx context.Context, resource string) (Release, error)
