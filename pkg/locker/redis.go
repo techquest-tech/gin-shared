@@ -58,14 +58,12 @@ func (r *RedisLocker) WaitForLocker(ctx context.Context, resource string, maxWai
 	return func(ctx context.Context) error {
 		err := lock.Release(context.Background())
 		if err != nil {
-			ll.Error("release locker failed. try to delete it", zap.Error(err))
-			err = r.client.Del(context.Background(), LockerPrefix+resource).Err()
-			if err != nil {
-				ll.Error("delete locker failed", zap.Error(err))
-				return err
+			if errors.Is(err, redislock.ErrLockNotHeld) {
+				ll.Warn("release locker skipped, lock not held", zap.Error(err))
+				return nil
 			}
-			ll.Info("deleted locker done.")
-			return nil
+			ll.Error("release locker failed", zap.Error(err))
+			return err
 		}
 		ll.Debug("release locker done.")
 		return nil
