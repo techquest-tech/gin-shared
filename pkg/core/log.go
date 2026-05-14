@@ -2,6 +2,7 @@ package core
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -27,6 +28,8 @@ func InitLogger(p Bootup) (*zap.Logger, error) {
 	}
 
 	settings.SetDefault("level", "info")
+	settings.SetDefault("outputPaths", []string{"stdout"})
+	settings.SetDefault("errorOutputPaths", []string{"stderr"})
 
 	//set the Level
 	level := zap.NewAtomicLevel()
@@ -48,7 +51,41 @@ func InitLogger(p Bootup) (*zap.Logger, error) {
 		config = zap.NewDevelopmentConfig()
 	}
 
-	config.OutputPaths = []string{"stdout"}
+	outputPaths := settings.GetStringSlice("outputPaths")
+	if len(outputPaths) == 0 {
+		outputPaths = []string{"stdout"}
+	}
+	for _, p := range outputPaths {
+		if p == "" || p == "stdout" || p == "stderr" || strings.Contains(p, "://") {
+			continue
+		}
+		dir := filepath.Dir(p)
+		if dir == "." || dir == "" {
+			continue
+		}
+		if mkErr := os.MkdirAll(dir, 0o755); mkErr != nil {
+			return nil, mkErr
+		}
+	}
+	config.OutputPaths = outputPaths
+
+	errorOutputPaths := settings.GetStringSlice("errorOutputPaths")
+	if len(errorOutputPaths) == 0 {
+		errorOutputPaths = []string{"stderr"}
+	}
+	for _, p := range errorOutputPaths {
+		if p == "" || p == "stdout" || p == "stderr" || strings.Contains(p, "://") {
+			continue
+		}
+		dir := filepath.Dir(p)
+		if dir == "." || dir == "" {
+			continue
+		}
+		if mkErr := os.MkdirAll(dir, 0o755); mkErr != nil {
+			return nil, mkErr
+		}
+	}
+	config.ErrorOutputPaths = errorOutputPaths
 
 	config.Level.SetLevel(level.Level())
 
