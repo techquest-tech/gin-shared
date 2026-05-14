@@ -5,6 +5,7 @@ package locker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/bsm/redislock"
@@ -49,7 +50,7 @@ func (r *RedisLocker) WaitForLocker(ctx context.Context, resource string, maxWai
 		ll.Error("lock failed", zap.Error(err))
 		if err == redislock.ErrNotObtained {
 			ll.Warn("resource is locked.", zap.Error(err))
-			return nil, errors.New(resource + " is locked.")
+			return nil, fmt.Errorf("%w: %s", ErrLocked, resource)
 		}
 		// panic("unexpected error, " + err.Error())
 		return nil, err
