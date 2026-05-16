@@ -50,8 +50,17 @@ func init() {
 		viper.SetDefault(HealthURIKey, HealthURIValue)
 		uri := viper.GetString(HealthURIKey)
 
-		route.GET(uri, controller.Ping)
-		route.GET(baseUrl+uri, controller.Ping)
+		rootURI := HealthURIValue
+		route.GET(rootURI, controller.Ping)
+		if baseUrl != "" {
+			route.GET(baseUrl+rootURI, controller.Ping)
+		}
+		if uri != "" && uri != rootURI {
+			route.GET(uri, controller.Ping)
+			if baseUrl != "" && uri[0] == '/' && len(baseUrl) > 0 && !(len(uri) >= len(baseUrl) && uri[:len(baseUrl)] == baseUrl) {
+				route.GET(baseUrl+uri, controller.Ping)
+			}
+		}
 		return controller
 	}, ginshared.ControllerOptions)
 }
