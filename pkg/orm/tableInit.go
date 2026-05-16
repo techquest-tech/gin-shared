@@ -17,6 +17,18 @@ func AppendEntity(entity ...interface{}) {
 	entities = append(entities, entity...)
 }
 
+var postMigrateMu sync.Mutex
+var postMigrateHooks = make([]func(db *gorm.DB, logger *zap.Logger) error, 0)
+
+func RegisterPostMigrate(fn func(db *gorm.DB, logger *zap.Logger) error) {
+	if fn == nil {
+		return
+	}
+	postMigrateMu.Lock()
+	postMigrateHooks = append(postMigrateHooks, fn)
+	postMigrateMu.Unlock()
+}
+
 var ormOnce sync.Once
 
 var migrateFN = func(db *gorm.DB, logger *zap.Logger, bus core.OptionalParam[EventBus.Bus]) {
@@ -58,6 +70,18 @@ func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus, clea
 	if err != nil {
 		logger.Error("init tables failed", zap.Error(err))
 	} else {
+		postMigrateMu.Lock()
+		hooks := make([]func(db *gorm.DB, logger *zap.Logger) error, len(postMigrateHooks))
+		copy(hooks, postMigrateHooks)
+		postMigrateMu.Unlock()
+		for _, hook := range hooks {
+			if hook == nil {
+				continue
+			}
+			if err := hook(db, logger); err != nil {
+				logger.Error("post migrate hook failed", zap.Error(err))
+			}
+		}
 		if bus != nil {
 			bus.Publish("sys.db.inited")
 		}
