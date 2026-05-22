@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/spf13/viper"
+	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/ginshared"
 	"gorm.io/gorm"
 )
@@ -36,7 +37,7 @@ func (h *HealthController) Ping(c *gin.Context) {
 		statusMessage = fmt.Sprintf("ping test failed. %v", err)
 	}
 
-	c.JSON(statusCode, gin.H{"status": statusMessage})
+	c.JSON(statusCode, gin.H{"status": statusMessage, "appName": core.AppName, "version": core.Version})
 
 }
 
