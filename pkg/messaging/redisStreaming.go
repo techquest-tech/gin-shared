@@ -282,17 +282,19 @@ func init() {
 		d := &DefaultMessgingService{
 			Client: client,
 			Logger: logger,
+			Settings: map[string]int64{},
 		}
 		sub := viper.Sub("messaging")
 		if sub != nil {
 			logger.Info("get settings.", zap.Any("keys", sub.AllKeys()))
 			sub.Unmarshal(d)
-			startIndex := len("settings.")
 			for _, key := range sub.AllKeys() {
 				logger.Info("get setting.", zap.String("key", key), zap.Any("value", sub.Get(key)))
-				k := key[startIndex:]
-				value := sub.GetInt64(key)
-				d.Settings[k] = value
+				if !strings.HasPrefix(key, "settings.") {
+					continue
+				}
+				k := strings.TrimPrefix(key, "settings.")
+				d.Settings[k] = sub.GetInt64(key)
 			}
 		}
 		return d, d
