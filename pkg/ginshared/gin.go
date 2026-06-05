@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -88,13 +90,51 @@ func Start() error {
 		viper.SetDefault(KeyShutdown, 3*time.Second)
 		viper.SetDefault("static.folder", "static")
 
-		// check if have static folder, if yes, enabled the static router
 		staticFolder := viper.GetString("static.folder")
 		enableStatic := viper.GetBool("static.enabled")
 		if enableStatic {
 			info, err := os.Stat(staticFolder)
 			if err == nil && info.IsDir() {
-				p.Router.Static("/", staticFolder)
+				staticRootAbs, err := filepath.Abs(staticFolder)
+				if err != nil {
+					p.Logger.Error("static folder abs failed", zap.Error(err), zap.String("staticFolder", staticFolder))
+				} else {
+					p.Router.NoRoute(func(c *gin.Context) {
+						reqPath := c.Request.URL.Path
+						cleanPath := path.Clean("/" + strings.TrimPrefix(reqPath, "/"))
+						cleanPath = strings.TrimPrefix(cleanPath, "/")
+						fullPath := filepath.Join(staticRootAbs, filepath.FromSlash(cleanPath))
+
+						fullAbs, err := filepath.Abs(fullPath)
+						if err != nil {
+							c.AbortWithStatus(http.StatusNotFound)
+							return
+						}
+						if fullAbs != staticRootAbs && !strings.HasPrefix(fullAbs, staticRootAbs+string(os.PathSeparator)) {
+							c.AbortWithStatus(http.StatusNotFound)
+							return
+						}
+
+						fi, err := os.Stat(fullAbs)
+						if err != nil {
+							c.AbortWithStatus(http.StatusNotFound)
+							return
+						}
+
+						if fi.IsDir() {
+							indexAbs := filepath.Join(fullAbs, "index.html")
+							if _, err := os.Stat(indexAbs); err != nil {
+								c.AbortWithStatus(http.StatusNotFound)
+								return
+							}
+							c.File(indexAbs)
+							return
+						}
+
+						c.File(fullAbs)
+					})
+					p.Logger.Info("static fallback enabled.", zap.String("staticFolder", staticRootAbs))
+				}
 				p.Logger.Info("static router enabled.")
 			}
 		}
