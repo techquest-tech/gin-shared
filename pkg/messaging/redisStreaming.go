@@ -87,7 +87,7 @@ func (msg *DefaultMessgingService) handleMessage(ctx context.Context, topic, gro
 		logger.Debug("recieved message", zap.String("ID", id), zap.Any("value", value))
 		raw := value[DefaultAttKey]
 		vv := raw.(string)
-		err := processor(ctx, topic, group, []byte(vv))
+		err := processor(WithMessageID(ctx, id), topic, group, []byte(vv))
 		if err != nil {
 			logger.Error("processor return error", zap.Error(err))
 			return err
