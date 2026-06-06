@@ -25,13 +25,14 @@ const (
 var JobHistoryAdaptor = core.NewChanAdaptor[JobHistory](1000)
 
 type JobHistory struct {
-	App      string
-	Job      string
-	Start    time.Time
-	Finished time.Time
-	Duration time.Duration
-	Succeed  bool
-	Message  string
+	App        string
+	AppVersion string
+	Job        string
+	Start      time.Time
+	Finished   time.Time
+	Duration   time.Duration
+	Succeed    bool
+	Message    string
 }
 
 type JobHistoryProvider struct {
@@ -104,9 +105,11 @@ func Withhistory(jobname string) cron.JobWrapper {
 				logger := zap.L().With(zap.String("jobname", jobname))
 				logger.Debug("mark job started")
 				task := JobHistory{
-					Job:     jobname,
-					Start:   time.Now(),
-					Succeed: true,
+					App:        core.AppName,
+					AppVersion: core.Version,
+					Job:        jobname,
+					Start:      time.Now(),
+					Succeed:    true,
 				}
 				defer func() {
 					if r := recover(); r != nil {

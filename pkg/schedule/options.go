@@ -15,10 +15,11 @@ func wrapFuncJob(jobname string, fn func() error, opt *ScheduleOptions) cron.Fun
 		func() {
 			logger := zap.L().With(zap.String("jobname", jobname))
 			task := JobHistory{
-				App:     core.AppName,
-				Job:     jobname,
-				Start:   time.Now(),
-				Succeed: true,
+				App:        core.AppName,
+				AppVersion: core.Version,
+				Job:        jobname,
+				Start:      time.Now(),
+				Succeed:    true,
 			}
 			var err error
 

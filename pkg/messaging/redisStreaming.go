@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -22,13 +21,11 @@ import (
 )
 
 // var AbandonedChan chan any
-
 var ConsumerName string
-
 var ResetTopics []string
 
 const (
-	DefaultMsgLimit          = math.MaxInt16
+	DefaultMsgLimit          = 5000 //math.MaxInt16, redis loading too much, make it 5K
 	DefaultAttKey            = "payload"
 	DefaultSchedule          = "@every 30m"
 	DefaultDeadLetterDurtion = 8 * time.Hour //if messaging pending for more than this duration, will be put to dead letter
@@ -280,8 +277,8 @@ func (msg *DefaultMessgingService) Sub(ctx context.Context, topic, group string,
 func init() {
 	core.Provide(func(client *redis.Client, logger *zap.Logger) (MessagingService, *DefaultMessgingService) {
 		d := &DefaultMessgingService{
-			Client: client,
-			Logger: logger,
+			Client:   client,
+			Logger:   logger,
 			Settings: map[string]int64{},
 		}
 		sub := viper.Sub("messaging")
