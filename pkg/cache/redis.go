@@ -126,7 +126,8 @@ func NewCacheProvider[T any](t time.Duration) CacheProvider[T] {
 
 	prefix := tname[from:to]
 
-	rr.prefix = prefix + "-"
+	rr.prefix = prefix + ":"
+	rr.legacyPrefix = prefix + "-"
 
 	localItem := DefaultLocalCacheItems
 
@@ -191,10 +192,11 @@ func (dd *DisabledCache[T]) Del(key string) error {
 }
 
 type RedisProvider[T any] struct {
-	prefix  string
-	timeout time.Duration
-	cache   *cache.Cache
-	Client  *redis.Client
+	prefix       string
+	legacyPrefix string
+	timeout      time.Duration
+	cache        *cache.Cache
+	Client       *redis.Client
 }
 
 // Get implements CacheProvider.
@@ -204,11 +206,18 @@ func (r *RedisProvider[T]) Get(key string) (T, bool) {
 		zap.L().Warn("redis cache is not functional now, ")
 		return value, false
 	}
-	k := r.prefix + key
-	zap.L().Debug("try to read value from redis", zap.String("key", k))
+	keysToTry := []string{r.prefix + key}
+	if r.legacyPrefix != "" && r.legacyPrefix != r.prefix {
+		keysToTry = append(keysToTry, r.legacyPrefix+key)
+	}
 
 	ctx := context.TODO()
-	if r.cache.Exists(ctx, k) {
+	for _, k := range keysToTry {
+		zap.L().Debug("try to read value from redis", zap.String("key", k))
+		if !r.cache.Exists(ctx, k) {
+			continue
+		}
+
 		t := reflect.TypeOf(value)
 		if t.Kind() != reflect.Ptr {
 			err := r.cache.Get(context.TODO(), k, &value)
@@ -217,20 +226,27 @@ func (r *RedisProvider[T]) Get(key string) (T, bool) {
 				return value, false
 			}
 			zap.L().Debug("read value from redis done", zap.String("key", k), zap.Any("value", value))
-			return value, true
-		} else {
-			var vv *T
-			err := r.cache.Get(context.TODO(), k, &vv)
-			if err != nil {
-				zap.L().Error("read redis cache failed.", zap.Error(err))
-				return value, false
+			if r.legacyPrefix != "" && strings.HasPrefix(k, r.legacyPrefix) {
+				r.setAny(key, value)
 			}
-			r := *vv
-			zap.L().Debug("read value from redis done", zap.String("key", k))
-			return r, true
+			return value, true
 		}
+
+		var vv *T
+		err := r.cache.Get(context.TODO(), k, &vv)
+		if err != nil {
+			zap.L().Error("read redis cache failed.", zap.Error(err))
+			return value, false
+		}
+		rv := *vv
+		zap.L().Debug("read value from redis done", zap.String("key", k))
+		if r.legacyPrefix != "" && strings.HasPrefix(k, r.legacyPrefix) {
+			r.setAny(key, rv)
+		}
+		return rv, true
 	}
-	zap.L().Debug("no value from redis", zap.String("key", k))
+
+	zap.L().Debug("no value from redis", zap.String("key", r.prefix+key))
 	return value, false
 }
 
@@ -261,23 +277,48 @@ func (r *RedisProvider[T]) Set(key string, value T) {
 	r.setAny(key, value)
 }
 func (r *RedisProvider[T]) Keys() []string {
-	raw, err := r.Client.Keys(context.TODO(), r.prefix+"*").Result()
+	rawNew, err := r.Client.Keys(context.TODO(), r.prefix+"*").Result()
 	if err != nil {
 		zap.L().Error("get keys failed.", zap.Error(err))
 		return []string{}
 	}
-	keys := make([]string, 0)
+	raw := rawNew
+	if r.legacyPrefix != "" && r.legacyPrefix != r.prefix {
+		rawOld, err := r.Client.Keys(context.TODO(), r.legacyPrefix+"*").Result()
+		if err != nil {
+			zap.L().Error("get keys failed.", zap.Error(err))
+			return []string{}
+		}
+		raw = append(raw, rawOld...)
+	}
+
+	seen := make(map[string]struct{}, len(raw))
+	keys := make([]string, 0, len(raw))
 	for _, v := range raw {
 		k := strings.TrimPrefix(v, r.prefix)
-		if k != "" {
-			keys = append(keys, k)
+		if r.legacyPrefix != "" && k == v {
+			k = strings.TrimPrefix(v, r.legacyPrefix)
 		}
-
+		if k == "" {
+			continue
+		}
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		keys = append(keys, k)
 	}
 	return keys
 }
 func (r *RedisProvider[T]) Del(key string) error {
-	return r.cache.Delete(context.TODO(), r.prefix+key)
+	err := r.cache.Delete(context.TODO(), r.prefix+key)
+	if r.legacyPrefix != "" && r.legacyPrefix != r.prefix {
+		err2 := r.cache.Delete(context.TODO(), r.legacyPrefix+key)
+		if err == nil {
+			err = err2
+		}
+	}
+	return err
 }
 
 func init() {
