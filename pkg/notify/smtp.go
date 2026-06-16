@@ -2,6 +2,7 @@ package notify
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"fmt"
 	"html/template"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jordan-wright/email"
 	"github.com/spf13/viper"
@@ -45,13 +47,15 @@ type EmailNotifer struct {
 	SMTP     SmtpSettings
 	Template map[string]*EmailTmpl
 	Once     sync.Once
+
+	mu        sync.Mutex
+	namespace string
+	initedAt  time.Time
 }
 
-func (en *EmailNotifer) PostInit() error {
-	if en.Logger == nil {
-		en.Logger = zap.L()
-	}
-
+// initTemplatesAndAuth 初始化模板渲染器与 SMTP 认证信息。
+// 返回值：返回初始化过程中的错误信息。
+func (en *EmailNotifer) initTemplatesAndAuth() error {
 	if en.SMTP.Host == "" {
 		viper.UnmarshalKey("smtp", &en.SMTP)
 	}
@@ -59,8 +63,6 @@ func (en *EmailNotifer) PostInit() error {
 	for _, item := range en.Template {
 		item.tSub = template.Must(template.New("sub").Parse(item.Subject))
 		item.tBody = template.Must(template.New("body").Parse(item.Body))
-		// item.tNotfound = template.Must(template.New("body").Parse(item.Notfound))
-
 		en.Logger.Debug("template's receivers", zap.Any("template", item))
 	}
 
@@ -69,6 +71,26 @@ func (en *EmailNotifer) PostInit() error {
 		en.SMTP.auth = smtp.PlainAuth("", en.SMTP.Username, en.SMTP.Password, en.SMTP.Host)
 		en.Logger.Info("send email with auth", zap.String("username", en.SMTP.Username))
 	}
+	return nil
+}
+
+func (en *EmailNotifer) PostInit() error {
+	if en.Logger == nil {
+		en.Logger = zap.L()
+	}
+
+	en.mu.Lock()
+	defer en.mu.Unlock()
+
+	// 邮件通知配置优先从数据库加载；当数据库中缺失配置时，继续使用 viper/yaml 中已有配置。
+	// 由于对外初始化接口不变，这里采用“根据模板名推断 namespace”并做最小侵入的读取。
+	if err := en.tryLoadFromDBOrSkip(context.Background()); err != nil {
+		return err
+	}
+	if err := en.initTemplatesAndAuth(); err != nil {
+		return err
+	}
+	en.initedAt = time.Now()
 	return nil
 }
 
@@ -84,52 +106,119 @@ func (en *EmailNotifer) SendTo(tmpl string, to []string, cc []string, bcc []stri
 		}
 	})
 	e := email.NewEmail()
+	var smtpCfg SmtpSettings
 
-	e.From = en.From
+	// 当启用 DB 配置时，为保证配置修改立即生效，每次发送前都会尝试从 DB 重新加载一次最新配置。
+	// 为避免并发发送与配置热更新产生数据竞争，这里会在“构建邮件内容”阶段加锁。
+	dsn := strings.TrimSpace(viper.GetString("database.connection"))
+	if dsn != "" {
+		en.mu.Lock()
+		if err := en.tryLoadFromDBOrSkip(context.Background()); err != nil {
+			en.mu.Unlock()
+			return err
+		}
+		if err := en.initTemplatesAndAuth(); err != nil {
+			en.mu.Unlock()
+			return err
+		}
 
-	out := bytes.Buffer{}
+		e.From = en.From
 
-	tmp, ok := en.Template[tmpl]
-	if !ok {
-		return fmt.Errorf("%s is missed from settings", tmpl)
-	}
-	en.Logger.Debug("template", zap.String("tmpl", tmpl))
-	en.Logger.Debug("template is ", zap.Any("", tmp))
+		out := bytes.Buffer{}
+		tmp, ok := en.Template[tmpl]
+		if !ok {
+			en.mu.Unlock()
+			return fmt.Errorf("%s is missed from settings", tmpl)
+		}
+		en.Logger.Debug("template", zap.String("tmpl", tmpl))
+		en.Logger.Debug("template is ", zap.Any("", tmp))
 
-	if len(to) > 0 {
-		e.To = to
-	}
-	if len(tmp.Receivers) > 0 {
-		e.To = append(e.To, tmp.Receivers...)
-	}
-	if len(cc) > 0 {
-		e.Cc = cc
+		if len(to) > 0 {
+			e.To = to
+		}
+		if len(tmp.Receivers) > 0 {
+			e.To = append(e.To, tmp.Receivers...)
+		}
+		if len(cc) > 0 {
+			e.Cc = cc
+		} else {
+			e.Cc = tmp.CcReceivers
+		}
+		if len(bcc) > 0 {
+			e.Bcc = bcc
+		} else {
+			e.Bcc = tmp.BccReceivers
+		}
+		if len(tmp.ReplyTo) > 0 {
+			e.ReplyTo = tmp.ReplyTo
+		}
+
+		err := tmp.tSub.Execute(&out, data)
+		if err != nil {
+			en.Logger.Error("match email subject failed.", zap.Error(err))
+			en.mu.Unlock()
+			return err
+		}
+		e.Subject = out.String()
+
+		out = bytes.Buffer{}
+		err = tmp.tBody.Execute(&out, data)
+		if err != nil {
+			en.Logger.Error("match email content failed.", zap.Error(err))
+			en.mu.Unlock()
+			return err
+		}
+		e.HTML = out.Bytes()
+
+		smtpCfg = en.SMTP
+		en.mu.Unlock()
 	} else {
-		e.Cc = tmp.CcReceivers
-	}
-	if len(bcc) > 0 {
-		e.Bcc = bcc
-	} else {
-		e.Bcc = tmp.BccReceivers
-	}
-	if len(tmp.ReplyTo) > 0 {
-		e.ReplyTo = tmp.ReplyTo
-	}
+		e.From = en.From
 
-	err := tmp.tSub.Execute(&out, data)
-	if err != nil {
-		en.Logger.Error("match email subject failed.", zap.Error(err))
-		return err
-	}
-	e.Subject = out.String()
+		out := bytes.Buffer{}
+		tmp, ok := en.Template[tmpl]
+		if !ok {
+			return fmt.Errorf("%s is missed from settings", tmpl)
+		}
+		en.Logger.Debug("template", zap.String("tmpl", tmpl))
+		en.Logger.Debug("template is ", zap.Any("", tmp))
 
-	out = bytes.Buffer{}
-	err = tmp.tBody.Execute(&out, data)
-	if err != nil {
-		en.Logger.Error("match email content failed.", zap.Error(err))
-		return err
+		if len(to) > 0 {
+			e.To = to
+		}
+		if len(tmp.Receivers) > 0 {
+			e.To = append(e.To, tmp.Receivers...)
+		}
+		if len(cc) > 0 {
+			e.Cc = cc
+		} else {
+			e.Cc = tmp.CcReceivers
+		}
+		if len(bcc) > 0 {
+			e.Bcc = bcc
+		} else {
+			e.Bcc = tmp.BccReceivers
+		}
+		if len(tmp.ReplyTo) > 0 {
+			e.ReplyTo = tmp.ReplyTo
+		}
+
+		err := tmp.tSub.Execute(&out, data)
+		if err != nil {
+			en.Logger.Error("match email subject failed.", zap.Error(err))
+			return err
+		}
+		e.Subject = out.String()
+
+		out = bytes.Buffer{}
+		err = tmp.tBody.Execute(&out, data)
+		if err != nil {
+			en.Logger.Error("match email content failed.", zap.Error(err))
+			return err
+		}
+		e.HTML = out.Bytes()
+		smtpCfg = en.SMTP
 	}
-	e.HTML = out.Bytes()
 
 	for _, file := range attachments {
 		if _, statErr := os.Stat(file); statErr != nil {
@@ -153,19 +242,20 @@ func (en *EmailNotifer) SendTo(tmpl string, to []string, cc []string, bcc []stri
 			en.Logger.Info("attached file", zap.String("file", file))
 		}
 	}
-	fullAddress := fmt.Sprintf("%s:%d", en.SMTP.Host, en.SMTP.Port)
+	fullAddress := fmt.Sprintf("%s:%d", smtpCfg.Host, smtpCfg.Port)
 
 	en.Logger.Debug("start to send email", zap.String("smtp", fullAddress),
 		zap.Strings("receivers", e.To),
-		zap.Bool("TLS", en.SMTP.Tls),
+		zap.Bool("TLS", smtpCfg.Tls),
 	)
-	if en.SMTP.Tls {
-		err = e.SendWithTLS(fullAddress, en.SMTP.auth, &tls.Config{
+	var err error
+	if smtpCfg.Tls {
+		err = e.SendWithTLS(fullAddress, smtpCfg.auth, &tls.Config{
 			InsecureSkipVerify: true,
-			ServerName:         en.SMTP.Host,
+			ServerName:         smtpCfg.Host,
 		})
 	} else {
-		err = e.Send(fullAddress, en.SMTP.auth)
+		err = e.Send(fullAddress, smtpCfg.auth)
 	}
 
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
@@ -171,6 +172,71 @@ type ErrorReport struct {
 	FullStack  []byte
 	Error      error
 	HappendAT  time.Time
+}
+
+func (e ErrorReport) MarshalJSON() ([]byte, error) {
+	out := struct {
+		AppName    string    `json:"AppName"`
+		AppVersion string    `json:"AppVersion"`
+		Uri        string    `json:"Uri"`
+		FullStack  []byte    `json:"FullStack"`
+		Error      string    `json:"Error"`
+		HappendAT  time.Time `json:"HappendAT"`
+	}{
+		AppName:    e.AppName,
+		AppVersion: e.AppVersion,
+		Uri:        e.Uri,
+		FullStack:  e.FullStack,
+		HappendAT:  e.HappendAT,
+	}
+	if e.Error != nil {
+		out.Error = e.Error.Error()
+	}
+	return json.Marshal(out)
+}
+
+func (e *ErrorReport) UnmarshalJSON(data []byte) error {
+	var in struct {
+		AppName    string    `json:"AppName"`
+		AppVersion string    `json:"AppVersion"`
+		Uri        string    `json:"Uri"`
+		FullStack  []byte    `json:"FullStack"`
+		Error      any       `json:"Error"`
+		ErrorText  string    `json:"ErrorText"`
+		HappendAT  time.Time `json:"HappendAT"`
+	}
+	if err := json.Unmarshal(data, &in); err != nil {
+		return err
+	}
+
+	e.AppName = in.AppName
+	e.AppVersion = in.AppVersion
+	e.Uri = in.Uri
+	e.FullStack = in.FullStack
+	e.HappendAT = in.HappendAT
+
+	errText := in.ErrorText
+	if errText == "" {
+		switch v := in.Error.(type) {
+		case string:
+			errText = v
+		case map[string]any:
+			for _, k := range []string{"message", "Message", "error", "Error", "text", "Text"} {
+				if vv, ok := v[k]; ok {
+					if s, ok := vv.(string); ok && s != "" {
+						errText = s
+						break
+					}
+				}
+			}
+		}
+	}
+	if errText != "" {
+		e.Error = errors.New(errText)
+	} else {
+		e.Error = nil
+	}
+	return nil
 }
 
 var ErrorAdaptor = NewChanAdaptor[ErrorReport](1000) // error adaptor for monitor error.
