@@ -14,7 +14,7 @@ func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...Sche
 			opt = &opts[0]
 		}
 
-		fn := wrapFuncJob(jobname, cmd, opt)
+		fn := wrapFuncJob(jobname, schedule, cmd, opt)
 
 		// In RAM mode, Producer == Consumer == fn
 		return startCron(jobname, schedule, fn, fn, logger, opt)

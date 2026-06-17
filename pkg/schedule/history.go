@@ -28,11 +28,14 @@ type JobHistory struct {
 	App        string
 	AppVersion string
 	Job        string
+	Cron       string
 	Start      time.Time
 	Finished   time.Time
+	Next       time.Time
 	Duration   time.Duration
 	Succeed    bool
 	Message    string
+	Disabled   bool
 }
 
 type JobHistoryProvider struct {
@@ -79,6 +82,48 @@ func (p *JobHistoryProvider) SetJobhistory(h JobHistory) {
 	}
 
 }
+
+func (p *JobHistoryProvider) UpsertJobSchedule(jobname, schedule string, next time.Time, disabled bool) {
+	var h *JobHistory
+
+	r, err := p.Persister.GetValues(context.TODO(), jobHistoryPersisterKey, jobname)
+	if err == nil && len(r) > 0 && r[0] != nil {
+		h = &JobHistory{}
+		switch v := r[0].(type) {
+		case []byte:
+			if err := json.Unmarshal(v, h); err != nil {
+				h = nil
+			}
+		case string:
+			if err := json.Unmarshal([]byte(v), h); err != nil {
+				h = nil
+			}
+		default:
+			h = nil
+		}
+	}
+
+	if h == nil {
+		h = &JobHistory{}
+	}
+
+	h.App = core.AppName
+	h.AppVersion = core.Version
+	h.Job = jobname
+	h.Cron = schedule
+	h.Next = next
+	h.Disabled = disabled
+
+	data, err := json.Marshal(h)
+	if err != nil {
+		zap.L().Error("marshal job history failed", zap.Error(err))
+		return
+	}
+	if err := p.Persister.SetValues(context.TODO(), jobHistoryPersisterKey, map[string]any{jobname: string(data)}); err != nil {
+		zap.L().Error("set job history failed", zap.Error(err), zap.String("job", jobname))
+		return
+	}
+}
 func init() {
 	core.Provide(func(bus EventBus.Bus, h cache.Hash) *JobHistoryProvider {
 		return &JobHistoryProvider{Bus: bus, Persister: h}
@@ -108,6 +153,7 @@ func Withhistory(jobname string) cron.JobWrapper {
 					App:        core.AppName,
 					AppVersion: core.Version,
 					Job:        jobname,
+					Cron:       resolveJobSchedule(jobname, ""),
 					Start:      time.Now(),
 					Succeed:    true,
 				}
@@ -139,6 +185,7 @@ func Withhistory(jobname string) cron.JobWrapper {
 					done := time.Now()
 					task.Duration = time.Since(task.Start)
 					task.Finished = done
+					task.Next = resolveJobNextRuntime(jobname, task.Cron, done)
 					logger.Debug("job end", zap.Duration("duration", task.Duration))
 
 					if provider != nil {

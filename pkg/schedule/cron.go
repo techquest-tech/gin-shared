@@ -41,6 +41,44 @@ func CheckIfEnabled() cron.JobWrapper {
 
 var jobs = make(map[string]func())
 
+type cachedJobSchedule struct {
+	Schedule string
+	Next     time.Time
+	Disabled bool
+}
+
+var (
+	cachedJobSchedules   = make(map[string]cachedJobSchedule)
+	cachedJobSchedulesMu sync.Mutex
+)
+
+func cacheJobSchedule(jobname, schedule string, next time.Time, disabled bool) {
+	cachedJobSchedulesMu.Lock()
+	cachedJobSchedules[jobname] = cachedJobSchedule{
+		Schedule: schedule,
+		Next:     next,
+		Disabled: disabled,
+	}
+	cachedJobSchedulesMu.Unlock()
+}
+
+func persistCachedJobSchedules() {
+	if provider == nil {
+		return
+	}
+
+	cachedJobSchedulesMu.Lock()
+	schedules := make(map[string]cachedJobSchedule, len(cachedJobSchedules))
+	for k, v := range cachedJobSchedules {
+		schedules[k] = v
+	}
+	cachedJobSchedulesMu.Unlock()
+
+	for jobname, s := range schedules {
+		provider.UpsertJobSchedule(jobname, s.Schedule, s.Next, s.Disabled)
+	}
+}
+
 func Run(jobname string) (err error) {
 	rawSetting := ScheduleDisabled
 	ScheduleDisabled = true
@@ -111,6 +149,7 @@ func startCron(jobname, schedule string, cronTriggerFn func(), manualTriggerFn f
 	jobs[jobname] = manualTriggerFn
 
 	if (ScheduleDisabled && !opt.NoGlobal) || schedule == "" || schedule == "-" {
+		cacheJobSchedule(jobname, schedule, time.Time{}, true)
 		logger.Info("cronjob is disabled.", zap.String("job", jobname))
 		return nil
 	}
@@ -128,6 +167,7 @@ func startCron(jobname, schedule string, cronTriggerFn func(), manualTriggerFn f
 		if dur < time.Second {
 			logger.Info("use time.Ticker instead of cron", zap.Duration("dur", dur))
 			ticker := time.NewTicker(dur)
+			cacheJobSchedule(jobname, schedule, time.Now().Add(dur), false)
 			core.OnServiceStopping(func() {
 				zap.L().Info("ticker stopped", zap.String("job", jobname))
 				ticker.Stop()
@@ -164,6 +204,7 @@ func startCron(jobname, schedule string, cronTriggerFn func(), manualTriggerFn f
 
 	entry := cr.Entry(item)
 	next := entry.Next
+	cacheJobSchedule(jobname, schedule, next, false)
 	logger.Info("schedule job done", zap.String("job", jobname), zap.String("schedule", schedule), zap.Time("next runtime", next))
 	core.OnServiceStopping(func() {
 		logger.Info("try to stop scheduled job.", zap.String("job", jobname))
@@ -171,4 +212,10 @@ func startCron(jobname, schedule string, cronTriggerFn func(), manualTriggerFn f
 		logger.Info("scheduled job stopped.", zap.String("job", jobname))
 	})
 	return nil
+}
+
+func init() {
+	core.OnServiceStarted(func() {
+		persistCachedJobSchedules()
+	})
 }

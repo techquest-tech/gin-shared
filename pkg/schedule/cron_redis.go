@@ -27,7 +27,7 @@ func CreateScheduledJob(jobname, schedule string, cmd func() error, opts ...Sche
 			opt = &opts[0]
 		}
 		// Consumer Logic: wrapped with Locker and History
-		fn := wrapFuncJob(jobname, cmd, opt)
+		fn := wrapFuncJob(jobname, schedule, cmd, opt)
 
 		// Producer Logic: Directly execute if Leader
 		wrappedFn := func() {

@@ -3,6 +3,7 @@ package schedule
 import (
 	"fmt"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -10,7 +11,48 @@ import (
 	"go.uber.org/zap"
 )
 
-func wrapFuncJob(jobname string, fn func() error, opt *ScheduleOptions) cron.FuncJob {
+func resolveJobSchedule(jobname, schedule string) string {
+	if schedule != "" {
+		return schedule
+	}
+
+	jobMux.RLock()
+	sj := scheduledJobs[jobname]
+	jobMux.RUnlock()
+	if sj == nil {
+		return ""
+	}
+	return sj.Schedule
+}
+
+func resolveJobNextRuntime(jobname, schedule string, finishedAt time.Time) time.Time {
+	jobMux.RLock()
+	sj := scheduledJobs[jobname]
+	jobMux.RUnlock()
+	if sj != nil && sj.Cron != nil {
+		entry := sj.Cron.Entry(sj.EntryID)
+		if !entry.Next.IsZero() {
+			return entry.Next
+		}
+	}
+
+	if durStr, ok := strings.CutPrefix(schedule, "@every "); ok {
+		dur, err := time.ParseDuration(durStr)
+		if err != nil {
+			return time.Time{}
+		}
+		return finishedAt.Add(dur)
+	}
+
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+	sched, err := parser.Parse(schedule)
+	if err != nil {
+		return time.Time{}
+	}
+	return sched.Next(finishedAt)
+}
+
+func wrapFuncJob(jobname, schedule string, fn func() error, opt *ScheduleOptions) cron.FuncJob {
 	return cron.FuncJob(
 		func() {
 			logger := zap.L().With(zap.String("jobname", jobname))
@@ -18,6 +60,7 @@ func wrapFuncJob(jobname string, fn func() error, opt *ScheduleOptions) cron.Fun
 				App:        core.AppName,
 				AppVersion: core.Version,
 				Job:        jobname,
+				Cron:       resolveJobSchedule(jobname, schedule),
 				Start:      time.Now(),
 				Succeed:    true,
 			}
@@ -56,6 +99,7 @@ func wrapFuncJob(jobname string, fn func() error, opt *ScheduleOptions) cron.Fun
 				done := time.Now()
 				task.Duration = time.Since(task.Start)
 				task.Finished = done
+				task.Next = resolveJobNextRuntime(jobname, task.Cron, done)
 				logger.Debug("job end", zap.Duration("duration", task.Duration))
 				if provider != nil && !opt.NoHistory {
 					provider.SetJobhistory(task)
