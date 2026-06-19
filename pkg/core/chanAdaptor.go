@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
@@ -174,3 +175,90 @@ type ErrorReport struct {
 }
 
 var ErrorAdaptor = NewChanAdaptor[ErrorReport](1000) // error adaptor for monitor error.
+
+func (er ErrorReport) MarshalJSON() ([]byte, error) {
+	type errorReportJSON struct {
+		AppName    string    `json:"AppName"`
+		AppVersion string    `json:"AppVersion"`
+		Uri        string    `json:"Uri"`
+		FullStack  []byte    `json:"FullStack"`
+		Error      string    `json:"Error"`
+		HappendAT  time.Time `json:"HappendAT"`
+	}
+
+	var errStr string
+	if er.Error != nil {
+		errStr = er.Error.Error()
+	}
+
+	return json.Marshal(errorReportJSON{
+		AppName:    er.AppName,
+		AppVersion: er.AppVersion,
+		Uri:        er.Uri,
+		FullStack:  er.FullStack,
+		Error:      errStr,
+		HappendAT:  er.HappendAT,
+	})
+}
+
+func (er *ErrorReport) UnmarshalJSON(b []byte) error {
+	type errorReportJSON struct {
+		AppName    string          `json:"AppName"`
+		AppVersion string          `json:"AppVersion"`
+		Uri        string          `json:"Uri"`
+		FullStack  []byte          `json:"FullStack"`
+		Error      json.RawMessage `json:"Error"`
+		HappendAT  time.Time       `json:"HappendAT"`
+	}
+
+	var v errorReportJSON
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+
+	er.AppName = v.AppName
+	er.AppVersion = v.AppVersion
+	er.Uri = v.Uri
+	er.FullStack = v.FullStack
+	er.HappendAT = v.HappendAT
+	er.Error = decodeErrorReportError(v.Error)
+	return nil
+}
+
+func decodeErrorReportError(raw json.RawMessage) error {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		if s == "" {
+			return nil
+		}
+		return errors.New(s)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err == nil {
+		if len(m) == 0 {
+			return nil
+		}
+		if msg, ok := m["message"].(string); ok && msg != "" {
+			return errors.New(msg)
+		}
+		if msg, ok := m["error"].(string); ok && msg != "" {
+			return errors.New(msg)
+		}
+		return errors.New(string(raw))
+	}
+
+	var n any
+	if err := json.Unmarshal(raw, &n); err == nil {
+		if n == nil {
+			return nil
+		}
+		return errors.New(string(raw))
+	}
+
+	return errors.New(string(raw))
+}
