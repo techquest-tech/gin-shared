@@ -12,6 +12,7 @@ import (
 	"github.com/jinzhu/copier"
 	"github.com/parquet-go/parquet-go"
 	"github.com/samber/lo"
+	"github.com/spf13/viper"
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"github.com/techquest-tech/gin-shared/pkg/messaging"
 	"github.com/techquest-tech/gin-shared/pkg/storage"
@@ -121,6 +122,24 @@ func generateFileName(_, timestampformt string) (string, error) {
 	return result, nil
 }
 
+// resolveLogFilename 返回用于日志输出的完整文件路径。
+// fsKey: 文件系统配置键，用于判断当前是否为本地存储。
+// filename: parquet 实际写入时使用的相对路径或对象键。
+// 返回值：本地存储返回绝对路径，其它存储类型返回原始路径。
+func resolveLogFilename(fsKey string, filename string) string {
+	if filename == "" {
+		return filename
+	}
+	if fsKey != "" && viper.GetString(fsKey+".type") != "local" {
+		return filename
+	}
+	absPath, err := filepath.Abs(filename)
+	if err != nil {
+		return filename
+	}
+	return absPath
+}
+
 func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
 	fs, release, err := storage.CreateFs(p.Setting.FsKey)
 	if err != nil {
@@ -134,7 +153,8 @@ func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
 		zap.L().Error("generate file name failed.", zap.Error(err))
 		return "", err
 	}
-	logger := zap.L().With(zap.String("filename", filename))
+	logFilename := resolveLogFilename(p.Setting.FsKey, filename)
+	logger := zap.L().With(zap.String("filename", logFilename))
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -174,7 +194,7 @@ func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
 		logger.Error("failed to write parquet file", zap.Error(err))
 		return "", err
 	}
-	logger.Info("write parquet file done.", zap.String("filename", filename))
+	logger.Info("write parquet file done.", zap.String("filename", logFilename))
 	return filename, nil
 }
 
