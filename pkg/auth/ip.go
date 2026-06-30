@@ -62,6 +62,7 @@ func IPRangeWhitelistMiddleware(whitelist []string) gin.HandlerFunc {
 
 		// 如果 IP 不在白名单中，返回 403 Forbidden
 		if !allowed {
+			zap.L().Info("bloack ip", zap.String("ip", c.ClientIP()), zap.String("resource", c.Request.URL.Path))
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"message": "Access denied",
 			})
