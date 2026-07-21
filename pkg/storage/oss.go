@@ -7,7 +7,9 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
+	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
 	"github.com/techquest-tech/fsoss"
@@ -22,6 +24,8 @@ type OssSettings struct {
 	Region    string
 	Path      string
 }
+
+const ossPublicURLExpireSeconds int64 = 24 * 60 * 60
 
 func init() {
 	FSFactories["oss"] = initSSO
@@ -103,6 +107,56 @@ func createOSSPublicURL(key string) PublicURLFunc {
 			return "", err
 		}
 
+		objectKey := strings.TrimPrefix(fullFileName, "/")
+		if settings.AccessKey != "" && settings.SecretKey != "" {
+			signEndpoint := strings.TrimSpace(settings.Endpoint)
+			signEndpoint = strings.TrimPrefix(signEndpoint, "https://")
+			signEndpoint = strings.TrimPrefix(signEndpoint, "http://")
+
+			// OSS 默认是私有读，本地联调与线上展示都优先返回带有效期的签名 GET URL。
+			client, err := oss.New(signEndpoint, settings.AccessKey, settings.SecretKey)
+			if err != nil {
+				logger.Error("[storage] create oss client for signed url failed",
+					zap.String("key", key),
+					zap.String("endpoint", signEndpoint),
+					zap.String("bucket", settings.Bucket),
+					zap.String("fullFileName", fullFileName),
+					zap.Error(err),
+				)
+				return "", err
+			}
+			bucket, err := client.Bucket(settings.Bucket)
+			if err != nil {
+				logger.Error("[storage] get oss bucket for signed url failed",
+					zap.String("key", key),
+					zap.String("bucket", settings.Bucket),
+					zap.String("fullFileName", fullFileName),
+					zap.Error(err),
+				)
+				return "", err
+			}
+			signedURL, err := bucket.SignURL(objectKey, oss.HTTPGet, ossPublicURLExpireSeconds)
+			if err != nil {
+				logger.Error("[storage] sign oss public url failed",
+					zap.String("key", key),
+					zap.String("bucket", settings.Bucket),
+					zap.String("fullFileName", fullFileName),
+					zap.Int64("expireSeconds", ossPublicURLExpireSeconds),
+					zap.Error(err),
+				)
+				return "", err
+			}
+			logger.Info("[storage] create signed oss public url done",
+				zap.String("key", key),
+				zap.String("bucket", settings.Bucket),
+				zap.String("fullFileName", fullFileName),
+				zap.Int64("expireSeconds", ossPublicURLExpireSeconds),
+				zap.Time("expireAt", time.Now().Add(time.Duration(ossPublicURLExpireSeconds)*time.Second)),
+				zap.String("publicURL", signedURL),
+			)
+			return signedURL, nil
+		}
+
 		endpoint := strings.TrimSpace(settings.Endpoint)
 		if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
 			endpoint = "https://" + endpoint
@@ -122,9 +176,9 @@ func createOSSPublicURL(key string) PublicURLFunc {
 			host = settings.Bucket + "." + host
 		}
 		parsed.Host = host
-		parsed.Path = path.Join("/", strings.TrimPrefix(fullFileName, "/"))
+		parsed.Path = path.Join("/", objectKey)
 		publicURL := parsed.String()
-		logger.Info("[storage] create oss public url done",
+		logger.Warn("[storage] create unsigned oss public url done",
 			zap.String("key", key),
 			zap.String("bucket", settings.Bucket),
 			zap.String("fullFileName", fullFileName),
