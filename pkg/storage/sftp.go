@@ -21,7 +21,7 @@ type SftpSettings struct {
 }
 
 func init() {
-	NamedFsService["sftp"] = InitSftpRoot
+	FSFactories["sftp"] = InitSftpRoot
 }
 
 func InitSftpRoot(key string) (afero.Fs, Release, error) {

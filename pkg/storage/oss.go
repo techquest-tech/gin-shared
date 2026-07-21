@@ -2,7 +2,11 @@ package storage
 
 import (
 	"errors"
+	"fmt"
+	"net/url"
 	"os"
+	"path"
+	"strings"
 
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
@@ -20,8 +24,8 @@ type OssSettings struct {
 }
 
 func init() {
-	NamedFsService["oss"] = initSSO
-	FsCacheEnabled["oss"] = true
+	FSFactories["oss"] = initSSO
+	PublicURLFuncFactories["oss"] = createOSSPublicURL
 }
 
 func initSSO(key string) (afero.Fs, Release, error) {
@@ -61,4 +65,71 @@ func initSSO(key string) (afero.Fs, Release, error) {
 	fs := afero.NewBasePathFs(ossfs, settings.Path)
 
 	return fs, release, nil
+}
+
+// createOSSPublicURL 为 OSS 文件返回公开访问 URL 生成函数。
+// key: 存储配置键。
+// 返回值：返回基于当前 key 的公开访问 URL 生成函数。
+func createOSSPublicURL(key string) PublicURLFunc {
+	return func(fullFileName string) (string, error) {
+		logger := zap.L()
+		settings := &OssSettings{}
+		if err := viper.UnmarshalKey(key, settings); err != nil {
+			logger.Error("[storage] load oss settings for public url failed", zap.String("key", key), zap.Error(err))
+			return "", err
+		}
+		if settings.Endpoint == "" {
+			settings.Bucket = os.Getenv("OSS_BUCKET")
+			settings.AccessKey = os.Getenv("OSS_ID")
+			settings.SecretKey = os.Getenv("OSS_SECRET")
+			settings.Endpoint = os.Getenv("OSS_ENDPOINT")
+			settings.Region = os.Getenv("OSS_REGION")
+		}
+
+		fullFileName = strings.TrimSpace(fullFileName)
+		if fullFileName == "" {
+			err := fmt.Errorf("full file name is empty")
+			logger.Error("[storage] create oss public url failed", zap.String("key", key), zap.Error(err))
+			return "", err
+		}
+		if settings.Bucket == "" || settings.Endpoint == "" {
+			err := fmt.Errorf("oss public url requires bucket and endpoint")
+			logger.Error("[storage] create oss public url failed",
+				zap.String("key", key),
+				zap.String("bucket", settings.Bucket),
+				zap.String("endpoint", settings.Endpoint),
+				zap.Error(err),
+			)
+			return "", err
+		}
+
+		endpoint := strings.TrimSpace(settings.Endpoint)
+		if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+			endpoint = "https://" + endpoint
+		}
+		parsed, err := url.Parse(endpoint)
+		if err != nil {
+			logger.Error("[storage] parse oss endpoint failed",
+				zap.String("key", key),
+				zap.String("endpoint", endpoint),
+				zap.Error(err),
+			)
+			return "", err
+		}
+
+		host := parsed.Host
+		if !strings.HasPrefix(host, settings.Bucket+".") {
+			host = settings.Bucket + "." + host
+		}
+		parsed.Host = host
+		parsed.Path = path.Join("/", strings.TrimPrefix(fullFileName, "/"))
+		publicURL := parsed.String()
+		logger.Info("[storage] create oss public url done",
+			zap.String("key", key),
+			zap.String("bucket", settings.Bucket),
+			zap.String("fullFileName", fullFileName),
+			zap.String("publicURL", publicURL),
+		)
+		return publicURL, nil
+	}
 }
