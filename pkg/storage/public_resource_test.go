@@ -32,6 +32,48 @@ func TestCreateOSSPublicURL(t *testing.T) {
 	require.Equal(t, "https://demo-bucket.oss-cn-hangzhou.aliyuncs.com/upload/owner-a/blockedEpc/202607/epc.png", publicURL)
 }
 
+// TestCreateOSSPublicURLWithInternalEndpoint 验证 OSS 内网 Endpoint 会自动切换为外网地址。
+func TestCreateOSSPublicURLWithInternalEndpoint(t *testing.T) {
+	const rootKey = "storage.test.oss.internal"
+	t.Cleanup(func() {
+		viper.Set(rootKey, nil)
+	})
+
+	viper.Set(rootKey+".type", "oss")
+	viper.Set(rootKey+".bucket", "demo-bucket")
+	viper.Set(rootKey+".endpoint", "https://oss-cn-hangzhou-internal.aliyuncs.com")
+
+	publicURLFunc, err := GetPublicURLFunc(rootKey)
+	require.NoError(t, err)
+
+	publicURL, err := CreatePublicURLWithFunc(publicURLFunc, "upload/owner-a/blockedEpc/202607/epc.png")
+	require.NoError(t, err)
+	require.Equal(t, "https://demo-bucket.oss-cn-hangzhou.aliyuncs.com/upload/owner-a/blockedEpc/202607/epc.png", publicURL)
+}
+
+// TestNormalizeOSSEndpoint 验证阿里云 OSS 内网域名会被规范化为外网域名。
+func TestNormalizeOSSEndpoint(t *testing.T) {
+	normalizedEndpoint, converted, err := normalizeOSSEndpoint("oss-cn-hangzhou-internal.aliyuncs.com")
+	require.NoError(t, err)
+	require.True(t, converted)
+	require.Equal(t, "oss-cn-hangzhou.aliyuncs.com", normalizedEndpoint)
+
+	normalizedEndpoint, converted, err = normalizeOSSEndpoint("https://oss-cn-hangzhou.aliyuncs.com")
+	require.NoError(t, err)
+	require.False(t, converted)
+	require.Equal(t, "https://oss-cn-hangzhou.aliyuncs.com", normalizedEndpoint)
+}
+
+// TestLoadOSSPublicEndpointFromEnv 验证公共 URL 会优先读取公网 Endpoint。
+func TestLoadOSSPublicEndpointFromEnv(t *testing.T) {
+	t.Setenv("OSS_ENDPOINT_PUB", "https://oss-cn-hangzhou.aliyuncs.com")
+	t.Setenv("OSS_ENDPOINT", "https://oss-cn-hangzhou-internal.aliyuncs.com")
+	require.Equal(t, "https://oss-cn-hangzhou.aliyuncs.com", loadOSSPublicEndpointFromEnv())
+
+	t.Setenv("OSS_ENDPOINT_PUB", "")
+	require.Equal(t, "https://oss-cn-hangzhou-internal.aliyuncs.com", loadOSSPublicEndpointFromEnv())
+}
+
 // TestCreatePublicURLDefault 验证默认键会使用 fileroot 配置生成公共 URL。
 func TestCreatePublicURLDefault(t *testing.T) {
 	t.Cleanup(func() {
