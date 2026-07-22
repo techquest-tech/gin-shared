@@ -150,6 +150,23 @@ func normalizeOSSHost(host string) (string, bool) {
 	return host, false
 }
 
+// ensureHTTPSPublicEndpoint 将 endpoint 统一为 https scheme（仅用于 Public URL 场景）。
+// endpoint: OSS endpoint，允许带或不带 scheme。
+// 返回值：返回带 https scheme 的 endpoint 字符串以及错误信息。
+func ensureHTTPSPublicEndpoint(endpoint string) (string, error) {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return "", nil
+	}
+	if strings.HasPrefix(endpoint, "https://") {
+		return endpoint, nil
+	}
+	if strings.HasPrefix(endpoint, "http://") {
+		return "https://" + strings.TrimPrefix(endpoint, "http://"), nil
+	}
+	return "https://" + endpoint, nil
+}
+
 // createOSSPublicURL 为 OSS 文件返回公开访问 URL 生成函数。
 // key: 存储配置键。
 // 返回值：返回基于当前 key 的公开访问 URL 生成函数。
@@ -203,6 +220,17 @@ func createOSSPublicURL(key string) PublicURLFunc {
 		}
 		settings.Endpoint = normalizedEndpoint
 
+		publicEndpoint, err := ensureHTTPSPublicEndpoint(settings.Endpoint)
+		if err != nil {
+			logger.Error("[storage] ensure https oss endpoint failed",
+				zap.String("key", key),
+				zap.String("endpoint", settings.Endpoint),
+				zap.Error(err),
+			)
+			return "", err
+		}
+		settings.Endpoint = publicEndpoint
+
 		objectKey := strings.TrimPrefix(fullFileName, "/")
 		if settings.AccessKey != "" && settings.SecretKey != "" {
 			signEndpoint := strings.TrimSpace(settings.Endpoint)
@@ -211,7 +239,7 @@ func createOSSPublicURL(key string) PublicURLFunc {
 
 			// OSS 默认是私有读，本地联调与线上展示都优先返回带有效期的签名 GET URL。
 			var ossClient *oss.Client
-			ossClient, err = oss.New(signEndpoint, settings.AccessKey, settings.SecretKey)
+			ossClient, err = oss.New("https://"+signEndpoint, settings.AccessKey, settings.SecretKey)
 			if err != nil {
 				logger.Error("[storage] create oss client for signed url failed",
 					zap.String("key", key),
@@ -243,6 +271,9 @@ func createOSSPublicURL(key string) PublicURLFunc {
 				)
 				return "", err
 			}
+			if strings.HasPrefix(signedURL, "http://") {
+				signedURL = "https://" + strings.TrimPrefix(signedURL, "http://")
+			}
 			logger.Info("[storage] create signed oss public url done",
 				zap.String("key", key),
 				zap.String("bucket", settings.Bucket),
@@ -255,9 +286,6 @@ func createOSSPublicURL(key string) PublicURLFunc {
 		}
 
 		endpoint := strings.TrimSpace(settings.Endpoint)
-		if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
-			endpoint = "https://" + endpoint
-		}
 		parsed, err := url.Parse(endpoint)
 		if err != nil {
 			logger.Error("[storage] parse oss endpoint failed",

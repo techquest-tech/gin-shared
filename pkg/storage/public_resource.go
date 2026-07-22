@@ -3,7 +3,9 @@ package storage
 import (
 	"errors"
 	"mime"
+	"net"
 	"net/http"
+	"net/url"
 	"path"
 	"path/filepath"
 	"strings"
@@ -160,10 +162,29 @@ func buildLocalResourceURL(resourceXID string) string {
 	if strings.HasPrefix(domain, "http://") || strings.HasPrefix(domain, "https://") {
 		return strings.TrimRight(domain, "/") + uri
 	}
-	if strings.Contains(domain, "127.0.0.1") || strings.Contains(domain, "localhost") {
+	if isLocalhostOrIPDomain(domain) {
 		return "http://" + strings.TrimRight(domain, "/") + uri
 	}
 	return "https://" + strings.TrimRight(domain, "/") + uri
+}
+
+// isLocalhostOrIPDomain 判断域名是否为 localhost 或 IP 地址（含端口）。
+// domain: 域名或 IP（可包含端口），不包含协议头。
+// 返回值：返回是否为 localhost 或 IP。
+func isLocalhostOrIPDomain(domain string) bool {
+	domain = strings.TrimSpace(domain)
+	if domain == "" {
+		return false
+	}
+	parsed, err := url.Parse("http://" + domain)
+	if err != nil {
+		return strings.Contains(domain, "localhost") || net.ParseIP(domain) != nil
+	}
+	host := parsed.Hostname()
+	if host == "localhost" {
+		return true
+	}
+	return net.ParseIP(host) != nil
 }
 
 // serveLocalResourceByXID 根据 xid 返回本地文件。

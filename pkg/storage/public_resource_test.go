@@ -64,6 +64,21 @@ func TestNormalizeOSSEndpoint(t *testing.T) {
 	require.Equal(t, "https://oss-cn-hangzhou.aliyuncs.com", normalizedEndpoint)
 }
 
+// TestEnsureHTTPSPublicEndpoint 验证 Public URL 场景下 endpoint 会强制走 https。
+func TestEnsureHTTPSPublicEndpoint(t *testing.T) {
+	endpoint, err := ensureHTTPSPublicEndpoint("oss-cn-hangzhou.aliyuncs.com")
+	require.NoError(t, err)
+	require.Equal(t, "https://oss-cn-hangzhou.aliyuncs.com", endpoint)
+
+	endpoint, err = ensureHTTPSPublicEndpoint("http://oss-cn-hangzhou.aliyuncs.com")
+	require.NoError(t, err)
+	require.Equal(t, "https://oss-cn-hangzhou.aliyuncs.com", endpoint)
+
+	endpoint, err = ensureHTTPSPublicEndpoint("https://oss-cn-hangzhou.aliyuncs.com")
+	require.NoError(t, err)
+	require.Equal(t, "https://oss-cn-hangzhou.aliyuncs.com", endpoint)
+}
+
 // TestLoadOSSPublicEndpointFromEnv 验证公共 URL 会优先读取公网 Endpoint。
 func TestLoadOSSPublicEndpointFromEnv(t *testing.T) {
 	t.Setenv("OSS_ENDPOINT_PUB", "https://oss-cn-hangzhou.aliyuncs.com")
@@ -152,4 +167,22 @@ func TestServeLocalResourceByXID_NotFound(t *testing.T) {
 	router.ServeHTTP(resp, req)
 
 	require.Equal(t, http.StatusNotFound, resp.Code)
+}
+
+// TestBuildLocalResourceURLScheme 验证 domain 未带协议时默认使用 https，localhost 或 IP 使用 http。
+func TestBuildLocalResourceURLScheme(t *testing.T) {
+	t.Cleanup(func() {
+		viper.Set("domain", nil)
+		viper.Set("baseUri", nil)
+	})
+	viper.Set("baseUri", "/v1")
+
+	viper.Set("domain", "example.com")
+	require.Equal(t, "https://example.com/v1/resources/demo", buildLocalResourceURL("demo"))
+
+	viper.Set("domain", "localhost:8080")
+	require.Equal(t, "http://localhost:8080/v1/resources/demo", buildLocalResourceURL("demo"))
+
+	viper.Set("domain", "127.0.0.1:8080")
+	require.Equal(t, "http://127.0.0.1:8080/v1/resources/demo", buildLocalResourceURL("demo"))
 }
