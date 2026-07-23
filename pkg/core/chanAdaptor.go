@@ -124,12 +124,17 @@ func (ca *ChanAdaptor[T]) Subscripter(receiver string, fn Handler[T]) {
 		return
 	}
 	go func() {
+		var wg sync.WaitGroup
 		for v := range c {
-			err := fn(v)
-			if err != nil {
-				l.Error("handler error", zap.Error(err))
-			}
+			wg.Add(1)
+			go func(v T) {
+				defer wg.Done()
+				if err := fn(v); err != nil {
+					l.Error("handler error", zap.Error(err))
+				}
+			}(v)
 		}
+		wg.Wait()
 	}()
 }
 
