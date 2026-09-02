@@ -186,7 +186,7 @@ func createOSSPublicURL(key string) PublicURLFunc {
 			settings.Region = os.Getenv("OSS_REGION")
 		}
 
-		fullFileName = strings.TrimSpace(fullFileName)
+		fullFileName = SanitizeFilePath(fullFileName)
 		if fullFileName == "" {
 			err := fmt.Errorf("full file name is empty")
 			logger.Error("[storage] create oss public url failed", zap.String("key", key), zap.Error(err))

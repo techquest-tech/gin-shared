@@ -188,7 +188,7 @@ func MD5(raw []byte) string {
 	return signed
 }
 
-func ToAnyChan[T any](input chan T) chan any {
+func ToAnyChan[T any](input <-chan T) chan any {
 	output := make(chan any)
 	go func() {
 		for val := range input {
@@ -215,6 +215,9 @@ func GetStructNameOnly[T any](rr T) string {
 
 	if from > 0 {
 		from = from + 1
+	} else if from < 0 {
+		// no '.' and no '[' in the type name (e.g. "int"): use the whole name.
+		from = 0
 	}
 	to := strings.LastIndexByte(tname, ']')
 	if to == -1 {

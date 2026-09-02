@@ -4,6 +4,7 @@ package messaging
 
 import (
 	"context"
+	"time"
 
 	"github.com/techquest-tech/gin-shared/pkg/core"
 	"go.uber.org/zap"
@@ -17,6 +18,10 @@ func (m *MessagingDisabled) Pub(ctx context.Context, topic string, payload any) 
 	return nil
 }
 func (m *MessagingDisabled) Sub(ctx context.Context, topic, consumer string, processor Processor) error {
+	zap.L().Info("messaging is disabled.")
+	return nil
+}
+func (m *MessagingDisabled) SubBatch(ctx context.Context, topic, consumer string, batchSize int, flushInterval time.Duration, processor BatchProcessor) error {
 	zap.L().Info("messaging is disabled.")
 	return nil
 }

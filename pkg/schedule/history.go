@@ -22,7 +22,10 @@ const (
 // EventJobFailed   = "event.job.failed"
 )
 
-var JobHistoryAdaptor = core.NewChanAdaptor[JobHistory](1000)
+// JobHistoryAdaptor is the global adaptor for job history reports.
+// Defaults to the in-process chan implementation; a process can swap it for a
+// redis-streaming adaptor (see messaging.NewRedisAdaptor) before services start.
+var JobHistoryAdaptor core.Adaptor[JobHistory] = core.NewChanAdaptor[JobHistory](1000)
 
 type JobHistory struct {
 	App        string

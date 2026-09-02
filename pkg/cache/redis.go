@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -31,6 +32,26 @@ type RedisConfig struct {
 	PoolSize   int
 	MinIdle    int
 	ClientName string
+	// 超时与重试上限：Redis 运行期宕机时，单个缓存操作应在 ~1s 内失败而不是默认的数秒×3 次重试。
+	// 配置示例（config/app.yaml）：
+	//   redis:
+	//     dialTimeout: 1s
+	//     readTimeout: 1s
+	//     writeTimeout: 1s
+	//     poolTimeout: 2s
+	//     maxRetries: 0
+	DialTimeout  time.Duration
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	PoolTimeout  time.Duration
+	MaxRetries   int
+}
+
+func firstNonZeroDuration(v, fallback time.Duration) time.Duration {
+	if v > 0 {
+		return v
+	}
+	return fallback
 }
 
 func newRedisOptions(logger *zap.Logger) *redis.Options {
@@ -52,6 +73,17 @@ func newRedisOptions(logger *zap.Logger) *redis.Options {
 		PoolSize:     cfg.PoolSize,
 		MinIdleConns: cfg.MinIdle,
 		ClientName:   cfg.ClientName,
+		// 有界失败：Redis 宕机时快速失败（默认 1s 级 + 不重试），避免默认 DialTimeout5s/ReadTimeout3s/MaxRetries3
+		// 让每个缓存操作阻塞数秒、放大为请求级卡顿。显式配置可覆盖。
+		DialTimeout:  firstNonZeroDuration(cfg.DialTimeout, time.Second),
+		ReadTimeout:  firstNonZeroDuration(cfg.ReadTimeout, time.Second),
+		WriteTimeout: firstNonZeroDuration(cfg.WriteTimeout, time.Second),
+		MaxRetries:   cfg.MaxRetries,
+	}
+	if cfg.PoolTimeout > 0 {
+		opts.PoolTimeout = cfg.PoolTimeout
+	} else {
+		opts.PoolTimeout = opts.ReadTimeout + time.Second
 	}
 	if cfg.Host != "" {
 		opts.Addr = fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
@@ -108,7 +140,9 @@ type CacheConfig struct {
 func NewCacheProvider[T any](t time.Duration) CacheProvider[T] {
 	rr := &RedisProvider[T]{
 		// prefix:  randstr.Hex(4) + "-",
-		timeout: t,
+		timeout:   t,
+		gate:      redisGate,
+		writeGate: redisWriteGate,
 	}
 	tname := fmt.Sprintf("%T", rr)
 
@@ -197,6 +231,8 @@ type RedisProvider[T any] struct {
 	timeout      time.Duration
 	cache        *cache.Cache
 	Client       *redis.Client
+	gate         *healthGate
+	writeGate    *healthGate
 }
 
 // Get implements CacheProvider.
@@ -204,6 +240,10 @@ func (r *RedisProvider[T]) Get(key string) (T, bool) {
 	var value T
 	if r.cache == nil {
 		zap.L().Warn("redis cache is not functional now, ")
+		return value, false
+	}
+	if !r.gate.allow() {
+		zap.L().Debug("cache circuit open, skip redis get", zap.String("key", key))
 		return value, false
 	}
 	keysToTry := []string{r.prefix + key}
@@ -214,14 +254,14 @@ func (r *RedisProvider[T]) Get(key string) (T, bool) {
 	ctx := context.TODO()
 	for _, k := range keysToTry {
 		zap.L().Debug("try to read value from redis", zap.String("key", k))
-		if !r.cache.Exists(ctx, k) {
-			continue
-		}
-
 		t := reflect.TypeOf(value)
 		if t.Kind() != reflect.Ptr {
-			err := r.cache.Get(context.TODO(), k, &value)
+			err := r.cache.Get(ctx, k, &value)
+			if errors.Is(err, cache.ErrCacheMiss) {
+				continue
+			}
 			if err != nil {
+				r.gate.fail()
 				zap.L().Error("read redis cache failed.", zap.Error(err))
 				return value, false
 			}
@@ -233,8 +273,12 @@ func (r *RedisProvider[T]) Get(key string) (T, bool) {
 		}
 
 		var vv *T
-		err := r.cache.Get(context.TODO(), k, &vv)
+		err := r.cache.Get(ctx, k, &vv)
+		if errors.Is(err, cache.ErrCacheMiss) {
+			continue
+		}
 		if err != nil {
+			r.gate.fail()
 			zap.L().Error("read redis cache failed.", zap.Error(err))
 			return value, false
 		}
@@ -260,6 +304,10 @@ func (r *RedisProvider[T]) setAny(key string, value any) {
 		tt = v.GetTTL()
 		zap.L().Info("set value with ttl", zap.Duration("ttl", tt))
 	}
+	if !r.gate.allow() || !r.writeGate.allow() {
+		zap.L().Debug("cache circuit open, skip redis set", zap.String("key", key))
+		return
+	}
 	err := r.cache.Set(&cache.Item{
 		Ctx:   context.TODO(),
 		Key:   r.prefix + key,
@@ -267,6 +315,8 @@ func (r *RedisProvider[T]) setAny(key string, value any) {
 		TTL:   tt,
 	})
 	if err != nil {
+		// 写失败只熔断「写」，不熔断「读」：内存满(OOM)时写会失败但读仍可用。
+		r.writeGate.fail()
 		zap.L().Error("set cache failed.", zap.Error(err))
 	}
 	zap.L().Info("set cache done", zap.String("key", r.prefix+key))
@@ -277,8 +327,12 @@ func (r *RedisProvider[T]) Set(key string, value T) {
 	r.setAny(key, value)
 }
 func (r *RedisProvider[T]) Keys() []string {
+	if !r.gate.allow() {
+		return []string{}
+	}
 	rawNew, err := r.Client.Keys(context.TODO(), r.prefix+"*").Result()
 	if err != nil {
+		r.gate.fail()
 		zap.L().Error("get keys failed.", zap.Error(err))
 		return []string{}
 	}
@@ -286,6 +340,7 @@ func (r *RedisProvider[T]) Keys() []string {
 	if r.legacyPrefix != "" && r.legacyPrefix != r.prefix {
 		rawOld, err := r.Client.Keys(context.TODO(), r.legacyPrefix+"*").Result()
 		if err != nil {
+			r.gate.fail()
 			zap.L().Error("get keys failed.", zap.Error(err))
 			return []string{}
 		}
@@ -311,6 +366,9 @@ func (r *RedisProvider[T]) Keys() []string {
 	return keys
 }
 func (r *RedisProvider[T]) Del(key string) error {
+	if !r.gate.allow() || !r.writeGate.allow() {
+		return ErrCacheUnavailable
+	}
 	err := r.cache.Delete(context.TODO(), r.prefix+key)
 	if r.legacyPrefix != "" && r.legacyPrefix != r.prefix {
 		err2 := r.cache.Delete(context.TODO(), r.legacyPrefix+key)

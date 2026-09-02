@@ -49,7 +49,7 @@ func DefaultParquetSetting() *ParquetSetting {
 // 	}, nil
 // }
 
-func NewParquetDataServiceBySchema(setting *ParquetSetting, ss *parquet.Schema, c chan any) *ParquetDataService {
+func NewParquetDataServiceBySchema(setting *ParquetSetting, ss *parquet.Schema, c <-chan any) *ParquetDataService {
 	service := &ParquetDataService{
 		Setting: setting,
 		Raw:     c,
@@ -63,7 +63,7 @@ func NewParquetDataServiceBySchema(setting *ParquetSetting, ss *parquet.Schema, 
 	return service
 }
 
-func NewParquetDataServiceT[T any](settings *ParquetSetting, filenamePattern string, c chan T) *ParquetDataService {
+func NewParquetDataServiceT[T any](settings *ParquetSetting, filenamePattern string, c <-chan T) *ParquetDataService {
 	clonedSettings := &ParquetSetting{}
 
 	copier.CopyWithOption(clonedSettings, settings, copier.Option{IgnoreEmpty: true, DeepCopy: true})
@@ -92,7 +92,7 @@ func NewParquetDataServiceT[T any](settings *ParquetSetting, filenamePattern str
 type ParquetDataService struct {
 	Setting *ParquetSetting
 	Schema  *parquet.Schema
-	Raw     chan any
+	Raw     <-chan any
 	Filter  func(msg []any) []any
 	// Event   PersistEvent
 	// fs afero.Fs
@@ -100,7 +100,13 @@ type ParquetDataService struct {
 
 // 生成文件名
 func generateFileName(_, timestampformt string) (string, error) {
-	timestamp := time.Now().Format(timestampformt)
+	return generateFileNameAt("", timestampformt, time.Now())
+}
+
+// generateFileNameAt 生成文件名，时间部分取自 ts（时间窗口起点），
+// 使同一时间窗口的数据落入同一个 parquet 文件。
+func generateFileNameAt(folder, timestampformt string, ts time.Time) (string, error) {
+	timestamp := ts.Format(timestampformt)
 
 	sand := randstr.Hex(4) // just incase any concurrent write to same file
 	result := fmt.Sprintf("%s_%s.parquet", timestamp, sand)
@@ -141,6 +147,26 @@ func resolveLogFilename(fsKey string, filename string) string {
 }
 
 func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
+	filename, err := generateFileName(p.Setting.Folder, p.Setting.FilenamePattern)
+	if err != nil {
+		zap.L().Error("generate file name failed.", zap.Error(err))
+		return "", err
+	}
+	return p.writeToFile(filename, msgs)
+}
+
+// WriteWindowed 把 msgs 按时间窗口 ts 写入一个 parquet 文件（文件名取自 ts），
+// 使同一时间窗口的数据落入同一个文件。用于按时间区间持久化的默认监听。
+func (p *ParquetDataService) WriteWindowed(msgs []any, ts time.Time) (string, error) {
+	filename, err := generateFileNameAt(p.Setting.Folder, p.Setting.FilenamePattern, ts)
+	if err != nil {
+		zap.L().Error("generate file name failed.", zap.Error(err))
+		return "", err
+	}
+	return p.writeToFile(filename, msgs)
+}
+
+func (p *ParquetDataService) writeToFile(filename string, msgs []any) (string, error) {
 	fs, release, err := storage.CreateFs(p.Setting.FsKey)
 	if err != nil {
 		zap.L().Error("create fs failed.", zap.Error(err))
@@ -148,11 +174,6 @@ func (p *ParquetDataService) WriteMessages(msgs []any) (string, error) {
 	}
 	defer release()
 
-	filename, err := generateFileName(p.Setting.Folder, p.Setting.FilenamePattern)
-	if err != nil {
-		zap.L().Error("generate file name failed.", zap.Error(err))
-		return "", err
-	}
 	logFilename := resolveLogFilename(p.Setting.FsKey, filename)
 	logger := zap.L().With(zap.String("filename", logFilename))
 

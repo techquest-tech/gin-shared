@@ -288,7 +288,11 @@ func normalizeStoredFullFileName(fullFileName string) string {
 	if fullFileName == "" {
 		return ""
 	}
-	cleaned := filepath.Clean(fullFileName)
+	sanitized := SanitizeFilePath(fullFileName)
+	if sanitized == "" {
+		return ""
+	}
+	cleaned := filepath.Clean(sanitized)
 	if cleaned == "." {
 		return ""
 	}

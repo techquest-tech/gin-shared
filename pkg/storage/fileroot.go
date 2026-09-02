@@ -5,11 +5,110 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
+
+var (
+	illegalPathChars = strings.NewReplacer(
+		"<", "_",
+		">", "_",
+		":", "_",
+		"\"", "_",
+		"|", "_",
+		"?", "_",
+		"*", "_",
+		"\\", "_",
+	)
+
+	windowsReservedNames = map[string]struct{}{
+		"CON": {}, "PRN": {}, "AUX": {}, "NUL": {},
+		"COM1": {}, "COM2": {}, "COM3": {}, "COM4": {}, "COM5": {},
+		"COM6": {}, "COM7": {}, "COM8": {}, "COM9": {},
+		"LPT1": {}, "LPT2": {}, "LPT3": {}, "LPT4": {}, "LPT5": {},
+		"LPT6": {}, "LPT7": {}, "LPT8": {}, "LPT9": {},
+	}
+)
+
+// SanitizeFileName 清理单个文件名（路径段）中的非法字符。
+// 处理范围：控制字符、Windows 非法字符、NUL、Windows 保留名、末尾空格/点号。
+// name: 原始文件名。
+// 返回值：返回清理后的安全文件名。
+func SanitizeFileName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+
+	var b strings.Builder
+	b.Grow(len(name))
+	for _, r := range name {
+		switch {
+		case r == 0:
+			continue
+		case r == '/':
+			b.WriteRune('_')
+		case r < 0x20 || r == 0x7F:
+			continue
+		case unicode.IsControl(r):
+			continue
+		default:
+			b.WriteRune(r)
+		}
+	}
+	name = illegalPathChars.Replace(b.String())
+
+	base := name
+	ext := ""
+	if idx := strings.LastIndex(base, "."); idx > 0 {
+		ext = base[idx:]
+		base = base[:idx]
+	}
+	if _, reserved := windowsReservedNames[strings.ToUpper(base)]; reserved {
+		base = base + "_"
+		name = base + ext
+	}
+
+	name = strings.TrimRight(name, " .")
+	if name == "" {
+		return "_"
+	}
+	return name
+}
+
+// SanitizeFilePath 清理完整文件路径中的非法字符，保留路径分隔符 '/'。
+// 对每个路径段分别应用 SanitizeFileName 规则。
+// filePath: 原始文件路径。
+// 返回值：返回清理后的安全文件路径。
+func SanitizeFilePath(filePath string) string {
+	filePath = strings.TrimSpace(filePath)
+	if filePath == "" {
+		return ""
+	}
+
+	sep := "/"
+	hasLeading := strings.HasPrefix(filePath, sep)
+	parts := strings.Split(filePath, sep)
+	sanitized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		s := SanitizeFileName(part)
+		if s != "" {
+			sanitized = append(sanitized, s)
+		}
+	}
+
+	result := strings.Join(sanitized, sep)
+	if hasLeading {
+		result = sep + result
+	}
+	return result
+}
 
 type Release func()
 
@@ -112,7 +211,7 @@ func GetPublicURLFuncDefault() (PublicURLFunc, error) {
 // 返回值：返回公共访问 URL 和错误信息。
 func CreatePublicURLWithFunc(publicURLFunc PublicURLFunc, fullFileName string) (string, error) {
 	logger := zap.L()
-	fullFileName = strings.TrimSpace(fullFileName)
+	fullFileName = SanitizeFilePath(fullFileName)
 	if fullFileName == "" {
 		err := errors.New("full file name is empty")
 		logger.Error("[storage] create public url failed", zap.String("fullFileName", fullFileName), zap.Error(err))
@@ -220,8 +319,12 @@ func CreatePublicURLWithInit(publicURLFunc PublicURLFunc, fullFileName string) (
 }
 
 func EnsureDir(fs afero.Fs, dir string) error {
-	if exists, err := afero.DirExists(fs, dir); !exists && err == nil {
-		return fs.MkdirAll(dir, os.ModePerm)
+	sanitized := SanitizeFilePath(dir)
+	if sanitized == "" {
+		return fmt.Errorf("invalid directory path after sanitization: %q", dir)
+	}
+	if exists, err := afero.DirExists(fs, sanitized); !exists && err == nil {
+		return fs.MkdirAll(sanitized, os.ModePerm)
 	} else if err != nil {
 		return err
 	}

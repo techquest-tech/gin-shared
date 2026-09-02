@@ -99,91 +99,141 @@ func (msg *DefaultMessgingService) handleMessage(ctx context.Context, topic, gro
 	return nil
 }
 
-func (msg *DefaultMessgingService) ProcessPendings(ctx context.Context, topic, group string, processor Processor) {
-	logger := msg.Logger.With(zap.String("topic", topic))
+// handleBatchMessage handles one message through a BatchProcessor (pending
+// redelivery feeds messages one by one even for batch consumers). The message
+// is acked only after the processor returns nil, otherwise it stays pending.
+func (msg *DefaultMessgingService) handleBatchMessage(ctx context.Context, topic, group string, logger *zap.Logger,
+	processor BatchProcessor, v redis.XMessage) error {
+	id := v.ID
+	value := v.Values
+	if value == nil {
+		logger.Warn("message value is empty", zap.String("messageID", id))
+		return nil
+	}
+	raw, ok := value[DefaultAttKey].(string)
+	if !ok {
+		logger.Warn("message value has no string payload", zap.String("messageID", id))
+		return nil
+	}
+	if err := processor(WithMessageID(ctx, id), topic, group, [][]byte{[]byte(raw)}); err != nil {
+		logger.Error("batch processor return error", zap.Error(err))
+		return err
+	}
+	resp := msg.Client.XAck(ctx, topic, group, id)
+	if resp.Err() != nil {
+		logger.Error("ack message failed.", zap.Error(resp.Err()))
+	}
+	logger.Debug("process done")
+	return nil
+}
 
+// forEachPending iterates every pending message of a consumer group and calls
+// fn for each. When fn fails, the message's pending age is checked: messages
+// pending longer than DefaultDeadLetterDurtion (or whose ID cannot be parsed)
+// are acknowledged and pushed to AbandonedChan, the others stay pending for a
+// later round.
+func (msg *DefaultMessgingService) forEachPending(ctx context.Context, topic, group string, logger *zap.Logger,
+	fn func(item redis.XMessage) error) {
 	cmdPending, err := msg.Client.XPending(ctx, topic, group).Result()
 	if err != nil {
 		logger.Error("read pending message failed.", zap.Error(err))
 		return
 	}
-	if cmdPending.Count > 0 {
-		for c, p := range cmdPending.Consumers {
-			xrangeResult, err := msg.Client.XPendingExt(ctx, &redis.XPendingExtArgs{
-				Stream:   topic,
+	if cmdPending.Count == 0 {
+		logger.Info("no pending messages")
+		return
+	}
+	for c, p := range cmdPending.Consumers {
+		xrangeResult, err := msg.Client.XPendingExt(ctx, &redis.XPendingExtArgs{
+			Stream:   topic,
+			Group:    group,
+			Count:    p,
+			Start:    cmdPending.Lower,
+			End:      cmdPending.Higher,
+			Consumer: c,
+		}).Result()
+		if err != nil {
+			logger.Warn("read pending message by XPendingExt failed. will try next round.", zap.String("topic", topic), zap.Error(err))
+			continue
+		}
+		logger.Info("read pending message done.", zap.Int("count", len(xrangeResult)))
+		for _, pendingItem := range xrangeResult {
+			readResult, err := msg.Client.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    group,
-				Count:    p,
-				Start:    cmdPending.Lower,
-				End:      cmdPending.Higher,
-				Consumer: c,
+				Consumer: pendingItem.Consumer,
+				Streams:  []string{topic, pendingItem.ID},
+				Count:    1,
+				Block:    0,
 			}).Result()
 			if err != nil {
-				logger.Warn("read pending message by XPendingExt failed. will try next round.", zap.String("topic", topic), zap.Error(err))
+				logger.Error("read pending message failed.", zap.Error(err))
+				return
+			}
+			if len(readResult) == 0 {
 				continue
 			}
-			logger.Info("read pending message done.", zap.Int("count", len(xrangeResult)))
-			for _, pendingItem := range xrangeResult {
-				readResult, err := msg.Client.XReadGroup(ctx, &redis.XReadGroupArgs{
-					Group:    group,
-					Consumer: pendingItem.Consumer,
-					Streams:  []string{topic, pendingItem.ID},
-					Count:    1,
-					Block:    0,
-				}).Result()
-				if err != nil {
-					logger.Error("read pending message failed.", zap.Error(err))
-					return
-				}
-				if len(readResult) == 0 {
-					continue
-				}
-				for _, item := range readResult[0].Messages {
-					err = msg.handleMessage(ctx, topic, group, logger, processor, item)
+			for _, item := range readResult[0].Messages {
+				if err := fn(item); err != nil {
+					logger.Error("process pending message failed. ", zap.Error(err))
+					strT := item.ID
+					index := strings.IndexRune(item.ID, '-')
+					if index > 0 {
+						strT = item.ID[:index]
+					}
+
+					unixTimeint, err := strconv.ParseInt(strT, 10, 64)
 					if err != nil {
-						logger.Error("process pending message failed. ", zap.Error(err))
-						strT := item.ID
-						index := strings.IndexRune(item.ID, '-')
-						if index > 0 {
-							strT = item.ID[:index]
+						logger.Warn("convert pending message id failed.", zap.Error(err))
+					}
+					pendinged := time.Since(time.Unix(unixTimeint/1000, 0))
+					logger.Info("checking pending duration", zap.Duration("pendinged", pendinged))
+					if pendinged >= DefaultDeadLetterDurtion || err != nil {
+						logger.Warn("pending message expired, abandoned.", zap.String("duration", pendinged.String()))
+						payload := item.Values
+						payload["ID"] = item.ID
+						payload["consumer"] = c
+						payload["topic"] = topic
+						payload["duration"] = pendinged.String()
+
+						// AbandonedChan is a global sink that may have no
+						// reader (nothing in the workspace consumes it), so
+						// never block on it — otherwise a single abandoned
+						// message would hang the whole pending check.
+						select {
+						case AbandonedChan <- payload:
+						default:
+							logger.Warn("abandoned chan full or unread, dropped", zap.String("messageID", item.ID))
 						}
 
-						unixTimeint, err := strconv.ParseInt(strT, 10, 64)
-						if err != nil {
-							logger.Warn("convert pending message id failed.", zap.Error(err))
-						}
-						pendinged := time.Since(time.Unix(unixTimeint/1000, 0))
-						logger.Info("checking pending duration", zap.Duration("pendinged", pendinged))
-						if pendinged >= DefaultDeadLetterDurtion || err != nil {
-							logger.Warn("pending message expired, abandoned.", zap.String("duration", pendinged.String()))
-							// resp := msg.Client.XAdd(ctx, &redis.XAddArgs{
-							// 	Stream: fmt.Sprintf("%s.%s.deadletter", topic, group),
-							// 	Values: item.Values,
-							// })
-							// if resp.Err() != nil {
-							// 	logger.Error("send to dead letter failed.", zap.Error(resp.Err()))
-							// }
-							payload := item.Values
-							payload["ID"] = item.ID
-							payload["consumer"] = c
-							payload["topic"] = topic
-							payload["duration"] = pendinged.String()
-
-							AbandonedChan <- payload
-
-							ackResp := msg.Client.XAck(ctx, topic, group, item.ID)
-							if ackResp.Err() != nil {
-								logger.Error("ack pending message failed.", zap.Error(ackResp.Err()))
-							}
+						ackResp := msg.Client.XAck(ctx, topic, group, item.ID)
+						if ackResp.Err() != nil {
+							logger.Error("ack pending message failed.", zap.Error(ackResp.Err()))
 						}
 					}
 				}
 			}
 		}
-
-		logger.Info("process pending message done")
-	} else {
-		logger.Info("no pending messages")
 	}
+
+	logger.Info("process pending message done")
+}
+
+func (msg *DefaultMessgingService) ProcessPendings(ctx context.Context, topic, group string, processor Processor) {
+	logger := msg.Logger.With(zap.String("topic", topic), zap.String("group", group))
+	msg.forEachPending(ctx, topic, group, logger, func(item redis.XMessage) error {
+		return msg.handleMessage(ctx, topic, group, logger, processor, item)
+	})
+}
+
+// ProcessPendingBatch is the pending-redelivery counterpart for batch
+// consumers: each pending message is replayed through the BatchProcessor one
+// by one (a failed redelivery follows the same expiry/abandon rules as the
+// single-message path).
+func (msg *DefaultMessgingService) ProcessPendingBatch(ctx context.Context, topic, group string, processor BatchProcessor) {
+	logger := msg.Logger.With(zap.String("topic", topic), zap.String("group", group))
+	msg.forEachPending(ctx, topic, group, logger, func(item redis.XMessage) error {
+		return msg.handleBatchMessage(ctx, topic, group, logger, processor, item)
+	})
 }
 
 func (msg *DefaultMessgingService) checkAndCreate(ctx context.Context, topic, group string) error {
@@ -249,6 +299,11 @@ func (msg *DefaultMessgingService) Sub(ctx context.Context, topic, group string,
 
 			vv, err := cmd.Result()
 			if err != nil {
+				// XReadGroup Block 超时无消息时 go-redis 返回 redis.Nil：属正常空闲，
+				// 不是错误，直接进入下一轮（避免每秒刷 error 日志 + 多余 checkAndCreate）。
+				if errors.Is(err, redis.Nil) {
+					continue
+				}
 				logger.Error("received message failed.", zap.Error(err))
 				//just in case someone else delete the topic and crash the receiver
 				go msg.checkAndCreate(ctx, topic, group)
@@ -269,6 +324,125 @@ func (msg *DefaultMessgingService) Sub(ctx context.Context, topic, group string,
 
 	schedule.CreateSchedule(fmt.Sprintf("check_pending_message/%s/%s", topic, group), pschedule, func() {
 		msg.ProcessPendings(context.TODO(), topic, group, processor)
+	})
+
+	return nil
+}
+
+// SubBatch registers a batch consumer on the stream. The consumer reads up to
+// batchSize messages (waiting up to flushInterval for more) and hands the whole
+// group to processor in ONE call; only after processor returns nil are all the
+// messages acknowledged together. On error the whole batch stays pending and is
+// redelivered by the pending-check schedule — a downstream write failure no
+// longer silently loses data that was already read out of the stream.
+func (msg *DefaultMessgingService) SubBatch(ctx context.Context, topic, group string,
+	batchSize int, flushInterval time.Duration, processor BatchProcessor) error {
+	if processor == nil {
+		return errors.New("processor is empty")
+	}
+
+	logger := msg.Logger.With(zap.String("topic", topic))
+	err := msg.checkAndCreate(ctx, topic, group)
+	if err != nil {
+		return err
+	}
+
+	if lo.Contains(ResetTopics, topic) {
+		msg.Client.XGroupSetID(ctx, topic, group, "0")
+		logger.Info("reset topic", zap.String("topic", topic))
+	}
+
+	if batchSize <= 0 {
+		batchSize = 0 // 0 = all available in one read
+	}
+	if flushInterval <= 0 {
+		flushInterval = time.Second
+	}
+
+	go func() {
+		if ConsumerName == "" {
+			hostname, err := os.Hostname()
+			if err != nil {
+				logger.Error("failed to get hostname, just make it empty", zap.Error(err))
+			}
+
+			ConsumerName = hostname //+ "-" + time.Now().Format("20060102150405")
+		}
+
+		logger.Info("start batch consumer", zap.String("group", group),
+			zap.String("topic", topic), zap.String("consumer", ConsumerName),
+			zap.Int("batchSize", batchSize), zap.Duration("flushInterval", flushInterval))
+
+		for {
+			cmd := msg.Client.XReadGroup(ctx, &redis.XReadGroupArgs{
+				Group:    group,
+				Consumer: ConsumerName,
+				Streams:  []string{topic, ">"},
+				Count:    int64(batchSize),
+				Block:    flushInterval,
+			})
+
+			vv, err := cmd.Result()
+			if err != nil {
+				// XReadGroup Block 超时无消息时 go-redis 返回 redis.Nil：属正常空闲，
+				// 不是错误，直接进入下一轮（避免每秒刷 error 日志 + 多余 checkAndCreate）。
+				if errors.Is(err, redis.Nil) {
+					continue
+				}
+				logger.Error("received message failed.", zap.Error(err))
+				//just in case someone else delete the topic and crash the receiver
+				go msg.checkAndCreate(ctx, topic, group)
+
+				time.Sleep(time.Second)
+				continue
+			}
+			if len(vv) == 0 || len(vv[0].Messages) == 0 {
+				continue
+			}
+
+			msgs := vv[0].Messages
+			ids := make([]string, 0, len(msgs))
+			payloads := make([][]byte, 0, len(msgs))
+			for _, v := range msgs {
+				ids = append(ids, v.ID)
+				if raw, ok := v.Values[DefaultAttKey].(string); ok {
+					payloads = append(payloads, []byte(raw))
+				}
+			}
+			if len(payloads) == 0 {
+				// nothing parseable; ack the ids so they don't stay pending forever
+				ackResp := msg.Client.XAck(ctx, topic, group, ids...)
+				if ackResp.Err() != nil {
+					logger.Error("batch ack failed.", zap.Error(ackResp.Err()))
+				}
+				continue
+			}
+
+			if err := processor(WithMessageID(ctx, msgs[0].ID), topic, group, payloads); err != nil {
+				// keep the whole batch pending: the pending-check schedule
+				// redelivers it later (or abandons it after the dead-letter
+				// duration) instead of silently losing it.
+				logger.Error("batch processor error, keep messages pending",
+					zap.Int("count", len(payloads)), zap.Error(err))
+				time.Sleep(time.Second)
+				continue
+			}
+
+			resp := msg.Client.XAck(ctx, topic, group, ids...)
+			if resp.Err() != nil {
+				logger.Error("batch ack failed.", zap.Error(resp.Err()))
+			}
+			logger.Debug("batch process done", zap.Int("count", len(payloads)))
+		}
+	}()
+
+	pschedule := msg.PendingSchedule
+	if pschedule == "" {
+		pschedule = DefaultSchedule
+	}
+
+	schedule.CreateSchedule(fmt.Sprintf("check_pending_message/%s/%s", topic, group), pschedule, func() {
+		msg.ProcessPendingBatch(context.TODO(), topic, group, processor)
 	})
 
 	return nil
