@@ -28,7 +28,7 @@ const (
 	DefaultMsgLimit          = 5000 //math.MaxInt16, redis loading too much, make it 5K
 	DefaultAttKey            = "payload"
 	DefaultSchedule          = "@every 30m"
-	DefaultDeadLetterDurtion = 8 * time.Hour //if messaging pending for more than this duration, will be put to dead letter
+	DefaultDeadLetterDurtion = 72 * time.Hour //if messaging pending for more than this duration, will be put to dead letter
 )
 
 type MessagnePending struct {
