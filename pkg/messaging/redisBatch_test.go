@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -165,6 +166,57 @@ func waitFor(t *testing.T, timeout time.Duration, cond func() bool, msg string) 
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("timed out: %s", msg)
+}
+
+// TestMessagingSubBatchCoalescesWithinFlushInterval verifies the batch consumer
+// keeps reading for up to flushInterval after the first message, so messages
+// arriving inside the window are handed to the processor as ONE batch. This
+// turns many tiny flushes into a single multi-row write downstream (e.g. the
+// MyDuck single-writer path where every INSERT creates a temp table), without
+// changing ack semantics: ack still happens only after the processor returns.
+func TestMessagingSubBatchCoalescesWithinFlushInterval(t *testing.T) {
+	client := testRedisClient(t)
+	defer client.Close()
+
+	ctx := context.Background()
+	svc := &DefaultMessgingService{
+		Client:   client,
+		Logger:   zap.L(),
+		Settings: map[string]int64{},
+	}
+	topic := fmt.Sprintf("test.subbatch.coalesce.%d", time.Now().UnixNano())
+	group := "batch-test"
+
+	// 先落 2 条，保证消费者首读即有数据（首读不会因窗口空闲而等待）。
+	assert.NoError(t, svc.checkAndCreate(ctx, topic, group))
+	for i := 0; i < 2; i++ {
+		assert.NoError(t, svc.Pub(ctx, topic, map[string]any{"i": i}))
+	}
+
+	var (
+		mu    sync.Mutex
+		calls []int
+	)
+	err := svc.SubBatch(ctx, topic, group, 10, 600*time.Millisecond,
+		func(ctx context.Context, topic, consumer string, payloads [][]byte) error {
+			mu.Lock()
+			defer mu.Unlock()
+			calls = append(calls, len(payloads))
+			return nil
+		})
+	assert.NoError(t, err)
+
+	// 首读后 ~150ms（仍在 600ms 聚合窗口内）再补 2 条：应并入同一批。
+	time.Sleep(150 * time.Millisecond)
+	for i := 2; i < 4; i++ {
+		assert.NoError(t, svc.Pub(ctx, topic, map[string]any{"i": i}))
+	}
+
+	waitFor(t, 3*time.Second, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(calls) == 1 && calls[0] == 4
+	}, "messages arriving inside the flush window must be coalesced into one batch")
 }
 
 // compile-time checks for the new optional capabilities.

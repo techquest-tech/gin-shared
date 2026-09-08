@@ -170,6 +170,17 @@ func (msg *DefaultMessgingService) forEachPending(ctx context.Context, topic, gr
 				return
 			}
 			if len(readResult) == 0 {
+				// 条目仍在 PEL 但按精确 ID 读不到内容 = 已被流裁剪（MAXLEN/XTRIM 只从
+				// 流头删，不看消费组）。数据在裁剪时已物理删除，重投不可能成功：直接
+				// XACK 移除墓碑，避免 PEL 永久卡死（pending 只增不减）。72h dead-letter
+				// 只挂在处理器报错分支（见下方 fn err 处理），覆盖不到本场景，故在此补齐。
+				// XACK 对不存在的条目是幂等 no-op，重复/并发清理无副作用。
+				logger.Warn("pending entry trimmed from stream, discard it",
+					zap.String("messageID", pendingItem.ID),
+					zap.String("topic", topic), zap.String("group", group))
+				if resp := msg.Client.XAck(ctx, topic, group, pendingItem.ID); resp.Err() != nil {
+					logger.Error("ack trimmed pending message failed.", zap.Error(resp.Err()))
+				}
 				continue
 			}
 			for _, item := range readResult[0].Messages {
@@ -329,6 +340,29 @@ func (msg *DefaultMessgingService) Sub(ctx context.Context, topic, group string,
 	return nil
 }
 
+// readGroupOnce 执行一次 XREADGROUP 批量读取。
+// 返回 (nil, nil) 表示阻塞超时无消息（redis.Nil，属正常空闲）；返回 (nil, err)
+// 表示真实错误；否则返回本次读到的消息。
+func (msg *DefaultMessgingService) readGroupOnce(ctx context.Context, topic, group string, batchSize int, block time.Duration) ([]redis.XMessage, error) {
+	vv, err := msg.Client.XReadGroup(ctx, &redis.XReadGroupArgs{
+		Group:    group,
+		Consumer: ConsumerName,
+		Streams:  []string{topic, ">"},
+		Count:    int64(batchSize),
+		Block:    block,
+	}).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if len(vv) == 0 || len(vv[0].Messages) == 0 {
+		return nil, nil
+	}
+	return vv[0].Messages, nil
+}
+
 // SubBatch registers a batch consumer on the stream. The consumer reads up to
 // batchSize messages (waiting up to flushInterval for more) and hands the whole
 // group to processor in ONE call; only after processor returns nil are all the
@@ -374,21 +408,10 @@ func (msg *DefaultMessgingService) SubBatch(ctx context.Context, topic, group st
 			zap.Int("batchSize", batchSize), zap.Duration("flushInterval", flushInterval))
 
 		for {
-			cmd := msg.Client.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    group,
-				Consumer: ConsumerName,
-				Streams:  []string{topic, ">"},
-				Count:    int64(batchSize),
-				Block:    flushInterval,
-			})
-
-			vv, err := cmd.Result()
+			// 首读：Block=flushInterval 等第一条消息。空闲超时（redis.Nil）属正常，
+			// 直接下一轮，避免空转刷日志。
+			msgs, err := msg.readGroupOnce(ctx, topic, group, batchSize, flushInterval)
 			if err != nil {
-				// XReadGroup Block 超时无消息时 go-redis 返回 redis.Nil：属正常空闲，
-				// 不是错误，直接进入下一轮（避免每秒刷 error 日志 + 多余 checkAndCreate）。
-				if errors.Is(err, redis.Nil) {
-					continue
-				}
 				logger.Error("received message failed.", zap.Error(err))
 				//just in case someone else delete the topic and crash the receiver
 				go msg.checkAndCreate(ctx, topic, group)
@@ -396,11 +419,37 @@ func (msg *DefaultMessgingService) SubBatch(ctx context.Context, topic, group st
 				time.Sleep(time.Second)
 				continue
 			}
-			if len(vv) == 0 || len(vv[0].Messages) == 0 {
+			if len(msgs) == 0 {
 				continue
 			}
 
-			msgs := vv[0].Messages
+			// 聚合窗口：距首读至多 flushInterval 内继续取新消息，凑满 batchSize 或窗口
+			// 耗尽才整批交给 processor。低流量下把若干条小消息合成一条大批写，显著降低
+			// 下游按“每条消息一次 INSERT/请求”处理的开销（如 MyDuck 单写者 + temp table
+			// 场景：同一窗口的 N 行合成一条多行 INSERT）。语义安全性不变：已读出未确认的
+			// 消息在 XREADGROUP 投递时即进入 pending，聚合窗口内崩溃由 pending-check 重投；
+			// ack 仍只在 processor 成功后统一发出，不引入丢数据窗口。batchSize<=0（一次取
+			// 全部可用）时不聚合，保持原有即时处理语义。
+			if batchSize > 0 {
+				deadline := time.Now().Add(flushInterval)
+				for len(msgs) < batchSize {
+					remain := time.Until(deadline)
+					if remain <= 0 {
+						break
+					}
+					more, err2 := msg.readGroupOnce(ctx, topic, group, batchSize-len(msgs), remain)
+					if err2 != nil {
+						// 聚合途中 Redis 抖动：不丢已读消息，按已聚合的整批处理，下次再续。
+						logger.Warn("accumulate read failed, flush what we have", zap.Error(err2))
+						break
+					}
+					if len(more) == 0 {
+						break // 窗口耗尽且无更多消息
+					}
+					msgs = append(msgs, more...)
+				}
+			}
+
 			ids := make([]string, 0, len(msgs))
 			payloads := make([][]byte, 0, len(msgs))
 			for _, v := range msgs {
