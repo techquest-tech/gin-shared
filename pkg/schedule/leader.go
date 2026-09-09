@@ -17,6 +17,7 @@ import (
 
 // LeaderElectionConfig defines configuration for leader election
 type LeaderElectionConfig struct {
+	Enabled  *bool         `yaml:"enabled"`
 	Interval time.Duration `yaml:"interval"`
 	TTL      time.Duration `yaml:"ttl"`
 	Key      string        `yaml:"key"`
@@ -30,6 +31,7 @@ type LeaderElection struct {
 	leaderID string
 	isLeader int32 // 0=false, 1=true
 	cancel   context.CancelFunc
+	enabled  bool
 }
 
 // NewLeaderElection creates a new LeaderElection instance
@@ -37,7 +39,10 @@ func NewLeaderElection(client *redis.Client, logger *zap.Logger, cfg *LeaderElec
 	if cfg == nil {
 		cfg = &LeaderElectionConfig{}
 	}
-	// Set defaults if not provided
+	enabled := true
+	if cfg.Enabled != nil {
+		enabled = *cfg.Enabled
+	}
 	if cfg.Interval == 0 {
 		cfg.Interval = 3 * time.Second
 	}
@@ -60,11 +65,17 @@ func NewLeaderElection(client *redis.Client, logger *zap.Logger, cfg *LeaderElec
 		logger:   logger,
 		config:   *cfg,
 		leaderID: leaderID,
+		enabled:  enabled,
 	}
 }
 
 // Start begins the leader election process in background
 func (le *LeaderElection) Start() {
+	if !le.enabled {
+		le.logger.Info("leader election disabled, acting as leader")
+		atomic.StoreInt32(&le.isLeader, 1)
+		return
+	}
 	if le.cancel != nil {
 		return // Already started
 	}
@@ -135,6 +146,9 @@ func (le *LeaderElection) elect(ctx context.Context) {
 
 // IsLeader returns true if the current instance is the leader
 func (le *LeaderElection) IsLeader() bool {
+	if !le.enabled {
+		return true
+	}
 	return atomic.LoadInt32(&le.isLeader) == 1
 }
 
