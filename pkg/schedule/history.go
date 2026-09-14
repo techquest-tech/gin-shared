@@ -49,26 +49,52 @@ type JobHistoryProvider struct {
 var jobHistoryPersisterKey = core.AppName + ".jobs"
 var provider *JobHistoryProvider
 
+// parseJobHistory 解析持久化的作业历史，兼容 []byte / string 两种存储形态。
+func parseJobHistory(raw any) (*JobHistory, error) {
+	var data []byte
+	switch v := raw.(type) {
+	case []byte:
+		data = v
+	case string:
+		data = []byte(v)
+	default:
+		return nil, fmt.Errorf("unexpected job history type %T", raw)
+	}
+
+	h := &JobHistory{}
+	if err := json.Unmarshal(data, h); err != nil {
+		return nil, err
+	}
+	return h, nil
+}
+
+// GetLastDoneJobHistory 返回最近一次「真正执行完成」的作业历史；从未成功执行时返回 nil。
+//
+// 注意：作业注册调度时（UpsertJobSchedule）会先写入一条只含调度信息的记录，它的
+// Start 是零值且 Succeed=false，并不代表作业跑过。调用方常用 Start 作为增量同步的
+// 起点（如 scm-saas 的 HandleSyncWdtUnSalesStockOutInfo），一旦把这条「注册记录」
+// 当成「上一次完成」，起点会被算到公元 1 年，进而构造出天量对象并撑爆内存。
 func (p *JobHistoryProvider) GetLastDoneJobHistory(jobname string) *JobHistory {
 	r, err := p.Persister.GetValues(context.TODO(), jobHistoryPersisterKey, jobname)
 	if err != nil {
 		zap.L().Error("get job history failed", zap.Error(err), zap.String("job", jobname))
 		return nil
 	}
-	if len(r) == 0 {
+	if len(r) == 0 || r[0] == nil {
 		return nil
 	}
 
-	h := &JobHistory{}
-	if b, ok := r[0].([]byte); ok {
-		json.Unmarshal(b, h)
-		return h
-	} else if s, ok := r[0].(string); ok {
-		json.Unmarshal([]byte(s), h)
-		return h
+	h, err := parseJobHistory(r[0])
+	if err != nil {
+		zap.L().Warn("parse job history failed, treat as never done",
+			zap.Error(err), zap.String("job", jobname))
+		return nil
+	}
+	if !h.Succeed || h.Start.IsZero() {
+		return nil
 	}
 
-	return nil
+	return h
 }
 func (p *JobHistoryProvider) SetJobhistory(h JobHistory) {
 	JobHistoryAdaptor.Push(h)
