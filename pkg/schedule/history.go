@@ -117,18 +117,10 @@ func (p *JobHistoryProvider) UpsertJobSchedule(jobname, schedule string, next ti
 
 	r, err := p.Persister.GetValues(context.TODO(), jobHistoryPersisterKey, jobname)
 	if err == nil && len(r) > 0 && r[0] != nil {
-		h = &JobHistory{}
-		switch v := r[0].(type) {
-		case []byte:
-			if err := json.Unmarshal(v, h); err != nil {
-				h = nil
-			}
-		case string:
-			if err := json.Unmarshal([]byte(v), h); err != nil {
-				h = nil
-			}
-		default:
-			h = nil
+		// 解析失败时按「没有历史」处理（避免把零值当历史）；
+		// 解析成功则保留已有的 Start/Succeed/Finished，这里只刷新调度信息。
+		if parsed, perr := parseJobHistory(r[0]); perr == nil {
+			h = parsed
 		}
 	}
 
