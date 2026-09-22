@@ -29,6 +29,10 @@ const (
 	DefaultAttKey            = "payload"
 	DefaultSchedule          = "@every 30m"
 	DefaultDeadLetterDurtion = 72 * time.Hour //if messaging pending for more than this duration, will be put to dead letter
+	// DefaultPendingMinIdle 是批量消费重投（pending 检查）的最小空闲门槛兜底值。
+	// 批量消费者把消息读进聚合窗口后，要等整批落库成功才统一 XAck，这段「在途」
+	// 时间内消息本来就挂在 PEL 里；重投若碰到它们，就会与随后的正常落库重复写一次。
+	DefaultPendingMinIdle = 60 * time.Second
 )
 
 type MessagnePending struct {
@@ -132,8 +136,12 @@ func (msg *DefaultMessgingService) handleBatchMessage(ctx context.Context, topic
 // pending longer than DefaultDeadLetterDurtion (or whose ID cannot be parsed)
 // are acknowledged and pushed to AbandonedChan, the others stay pending for a
 // later round.
+//
+// minIdle > 0 时跳过空闲时间不足 minIdle 的条目：批量消费者读出消息后要等整批
+// 落库成功才 XAck，这些「在途」消息本身就在 PEL 里，重投它们会造成重复写入。
+// 单条消费路径（ProcessPendings）传 0，行为不变。
 func (msg *DefaultMessgingService) forEachPending(ctx context.Context, topic, group string, logger *zap.Logger,
-	fn func(item redis.XMessage) error) {
+	minIdle time.Duration, fn func(item redis.XMessage) error) {
 	cmdPending, err := msg.Client.XPending(ctx, topic, group).Result()
 	if err != nil {
 		logger.Error("read pending message failed.", zap.Error(err))
@@ -143,6 +151,7 @@ func (msg *DefaultMessgingService) forEachPending(ctx context.Context, topic, gr
 		logger.Info("no pending messages")
 		return
 	}
+	skippedTotal := 0
 	for c, p := range cmdPending.Consumers {
 		xrangeResult, err := msg.Client.XPendingExt(ctx, &redis.XPendingExtArgs{
 			Stream:   topic,
@@ -158,18 +167,25 @@ func (msg *DefaultMessgingService) forEachPending(ctx context.Context, topic, gr
 		}
 		logger.Info("read pending message done.", zap.Int("count", len(xrangeResult)))
 		for _, pendingItem := range xrangeResult {
-			readResult, err := msg.Client.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    group,
-				Consumer: pendingItem.Consumer,
-				Streams:  []string{topic, pendingItem.ID},
-				Count:    1,
-				Block:    0,
-			}).Result()
+			// 在途消息（批量消费者已读出、正在聚合窗口里等整批落库）不重投：
+			// 重投会插入一次，随后原批次落库再插一次 → 下游多一行重复数据。
+			if minIdle > 0 && pendingItem.Idle < minIdle {
+				skippedTotal++
+				logger.Debug("skip in-flight pending message",
+					zap.String("messageID", pendingItem.ID),
+					zap.Duration("idle", pendingItem.Idle),
+					zap.Duration("minIdle", minIdle))
+				continue
+			}
+			// 按精确 ID 读回条目内容。不能用 XReadGroup 指定 ID：那是游标语义
+			// （返回 ID 更大的条目），会把「下一条 pending」当当前条目处理，并让
+			// 最后一条 pending 读不到内容、被下面误判成「已被裁剪」而 XACK 丢弃。
+			readMsgs, err := msg.Client.XRange(ctx, topic, pendingItem.ID, pendingItem.ID).Result()
 			if err != nil {
 				logger.Error("read pending message failed.", zap.Error(err))
 				return
 			}
-			if len(readResult) == 0 {
+			if len(readMsgs) == 0 {
 				// 条目仍在 PEL 但按精确 ID 读不到内容 = 已被流裁剪（MAXLEN/XTRIM 只从
 				// 流头删，不看消费组）。数据在裁剪时已物理删除，重投不可能成功：直接
 				// XACK 移除墓碑，避免 PEL 永久卡死（pending 只增不减）。72h dead-letter
@@ -183,7 +199,7 @@ func (msg *DefaultMessgingService) forEachPending(ctx context.Context, topic, gr
 				}
 				continue
 			}
-			for _, item := range readResult[0].Messages {
+			for _, item := range readMsgs {
 				if err := fn(item); err != nil {
 					logger.Error("process pending message failed. ", zap.Error(err))
 					strT := item.ID
@@ -226,12 +242,18 @@ func (msg *DefaultMessgingService) forEachPending(ctx context.Context, topic, gr
 		}
 	}
 
+	if skippedTotal > 0 {
+		logger.Info("pending messages still in flight, skipped",
+			zap.Int("skipped", skippedTotal), zap.Duration("minIdle", minIdle))
+	}
+
 	logger.Info("process pending message done")
 }
 
 func (msg *DefaultMessgingService) ProcessPendings(ctx context.Context, topic, group string, processor Processor) {
 	logger := msg.Logger.With(zap.String("topic", topic), zap.String("group", group))
-	msg.forEachPending(ctx, topic, group, logger, func(item redis.XMessage) error {
+	// 单条消费读完即 ack，没有聚合窗口，无需空闲门槛（0 = 不过滤）。
+	msg.forEachPending(ctx, topic, group, logger, 0, func(item redis.XMessage) error {
 		return msg.handleMessage(ctx, topic, group, logger, processor, item)
 	})
 }
@@ -241,8 +263,17 @@ func (msg *DefaultMessgingService) ProcessPendings(ctx context.Context, topic, g
 // by one (a failed redelivery follows the same expiry/abandon rules as the
 // single-message path).
 func (msg *DefaultMessgingService) ProcessPendingBatch(ctx context.Context, topic, group string, processor BatchProcessor) {
+	msg.ProcessPendingBatchWithMinIdle(ctx, topic, group, processor, 0)
+}
+
+// ProcessPendingBatchWithMinIdle 与 ProcessPendingBatch 相同，但跳过空闲时间小于
+// minIdle 的 pending 条目：批量消费者读出的消息在整批落库成功前一直挂在 PEL 里，
+// 这些在途消息不是失败消息，重投会与正常落库重复写一次。SubBatch 注册 pending
+// 检查时按 flushInterval 计算门槛（见 pendingMinIdle）。
+func (msg *DefaultMessgingService) ProcessPendingBatchWithMinIdle(ctx context.Context, topic, group string,
+	processor BatchProcessor, minIdle time.Duration) {
 	logger := msg.Logger.With(zap.String("topic", topic), zap.String("group", group))
-	msg.forEachPending(ctx, topic, group, logger, func(item redis.XMessage) error {
+	msg.forEachPending(ctx, topic, group, logger, minIdle, func(item redis.XMessage) error {
 		return msg.handleBatchMessage(ctx, topic, group, logger, processor, item)
 	})
 }
@@ -490,11 +521,32 @@ func (msg *DefaultMessgingService) SubBatch(ctx context.Context, topic, group st
 		pschedule = DefaultSchedule
 	}
 
+	// 批处理把消息读进聚合窗口后，要等整批落库成功才统一 XAck，这期间消息本就是
+	// pending。pending 检查必须跳过这些在途消息，否则「重投一次 + 正常落库一次」
+	// 就是下游的重复行（DuckDB monitor_* 表没有主键，重复只会越积越多）。
+	minIdle := msg.pendingMinIdle(flushInterval)
+	logger.Info("register pending check",
+		zap.String("schedule", pschedule), zap.Duration("flushInterval", flushInterval), zap.Duration("minIdle", minIdle))
+
 	schedule.CreateSchedule(fmt.Sprintf("check_pending_message/%s/%s", topic, group), pschedule, func() {
-		msg.ProcessPendingBatch(context.TODO(), topic, group, processor)
+		msg.ProcessPendingBatchWithMinIdle(context.TODO(), topic, group, processor, minIdle)
 	})
 
 	return nil
+}
+
+// pendingMinIdle 计算批量消费重投的最小空闲门槛：聚合窗口最长 flushInterval，
+// 之后还要等整批写库（quack 写入超时默认 30s），故取 2×flushInterval 且不低于
+// DefaultPendingMinIdle；可用配置 messaging.pendingMinIdle 覆盖（>0 生效）。
+func (msg *DefaultMessgingService) pendingMinIdle(flushInterval time.Duration) time.Duration {
+	if v := viper.GetDuration("messaging.pendingMinIdle"); v > 0 {
+		return v
+	}
+	minIdle := 2 * flushInterval
+	if minIdle < DefaultPendingMinIdle {
+		minIdle = DefaultPendingMinIdle
+	}
+	return minIdle
 }
 
 func init() {

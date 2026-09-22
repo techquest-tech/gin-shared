@@ -222,3 +222,92 @@ func TestMessagingSubBatchCoalescesWithinFlushInterval(t *testing.T) {
 // compile-time checks for the new optional capabilities.
 var _ core.BatchingAdaptor[string] = (*RedisAdaptor[string])(nil)
 var _ core.TryPusher[string] = (*RedisAdaptor[string])(nil)
+
+// TestMessagingPendingBatchSkipsInFlight verifies the pending redelivery of a
+// batch consumer skips messages that are still inside the aggregation window
+// (read but not yet acked, because the batch write has not returned yet), and
+// that minIdle = 0 keeps the old replay behaviour for genuinely failed
+// messages.
+func TestMessagingPendingBatchSkipsInFlight(t *testing.T) {
+	client := testRedisClient(t)
+	defer client.Close()
+
+	ctx := context.Background()
+	svc := &DefaultMessgingService{
+		Client:   client,
+		Logger:   zap.L(),
+		Settings: map[string]int64{},
+	}
+	// readButDoNotAck 读走消息但不确认，模拟「批量消费者已读出、正在聚合窗口里
+	// 等整批落库」的在途状态。
+	readButDoNotAck := func(t *testing.T, topic, group string) []redis.XMessage {
+		t.Helper()
+		res, err := client.XReadGroup(ctx, &redis.XReadGroupArgs{
+			Group:    group,
+			Consumer: "in-flight",
+			Streams:  []string{topic, ">"},
+			Count:    10,
+		}).Result()
+		assert.NoError(t, err)
+		assert.Len(t, res, 1)
+		if len(res) == 0 {
+			return nil
+		}
+		return res[0].Messages
+	}
+	calls := atomic.Int64{}
+	processor := func(ctx context.Context, topic, consumer string, payloads [][]byte) error {
+		calls.Add(1)
+		return nil
+	}
+
+	t.Run("in-flight messages are not replayed", func(t *testing.T) {
+		topic := fmt.Sprintf("test.pending.inflight.%d", time.Now().UnixNano())
+		group := "batch-test"
+		assert.NoError(t, svc.checkAndCreate(ctx, topic, group))
+		for i := 0; i < 2; i++ {
+			assert.NoError(t, svc.Pub(ctx, topic, map[string]any{"i": i}))
+		}
+		assert.Len(t, readButDoNotAck(t, topic, group), 2)
+
+		svc.ProcessPendingBatchWithMinIdle(ctx, topic, group, processor, 10*time.Second)
+
+		assert.Zero(t, calls.Load(), "in-flight pending messages must not be replayed")
+		p, err := client.XPending(ctx, topic, group).Result()
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), p.Count, "in-flight messages must stay pending for the running batch")
+	})
+
+	t.Run("failed messages are replayed when minIdle is 0", func(t *testing.T) {
+		topic := fmt.Sprintf("test.pending.idle.%d", time.Now().UnixNano())
+		group := "batch-test"
+		assert.NoError(t, svc.checkAndCreate(ctx, topic, group))
+		assert.NoError(t, svc.Pub(ctx, topic, map[string]any{"i": 1}))
+		assert.Len(t, readButDoNotAck(t, topic, group), 1)
+
+		svc.ProcessPendingBatchWithMinIdle(ctx, topic, group, processor, 0)
+
+		assert.Equal(t, int64(1), calls.Load(), "zero minIdle must keep the old replay behaviour")
+		p, err := client.XPending(ctx, topic, group).Result()
+		assert.NoError(t, err)
+		assert.Zero(t, p.Count, "replayed message must be acknowledged")
+	})
+
+	t.Run("trimmed pending entry is discarded", func(t *testing.T) {
+		topic := fmt.Sprintf("test.pending.trimmed.%d", time.Now().UnixNano())
+		group := "batch-test"
+		assert.NoError(t, svc.checkAndCreate(ctx, topic, group))
+		assert.NoError(t, svc.Pub(ctx, topic, map[string]any{"i": 1}))
+		assert.Len(t, readButDoNotAck(t, topic, group), 1)
+		// 流里的条目被裁掉，PEL 里还挂着墓碑。
+		assert.NoError(t, client.XTrimMaxLen(ctx, topic, 0).Err())
+
+		before := calls.Load()
+		svc.ProcessPendingBatchWithMinIdle(ctx, topic, group, processor, 0)
+
+		assert.Equal(t, before, calls.Load(), "trimmed entry must not reach the processor")
+		p, err := client.XPending(ctx, topic, group).Result()
+		assert.NoError(t, err)
+		assert.Zero(t, p.Count, "trimmed entry must be acked away")
+	})
+}

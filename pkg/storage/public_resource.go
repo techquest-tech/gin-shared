@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"fmt"
 	"mime"
 	"net"
 	"net/http"
@@ -263,9 +264,21 @@ func serveLocalResourceByXID(c *gin.Context) {
 	}
 	defer file.Close()
 
+	// 必须显式写 Content-Type：容器镜像通常没有 /etc/mime.types，mime.TypeByExtension 会返回空，
+	// 若留给 http.ServeContent 自行判断，它会退回按内容嗅探——而 .xlsx/.docx/.pptx 本质是 zip 容器
+	// （前缀 PK\x03\x04），会被嗅探成 application/zip，用户表现为「下载到的是 zip、打不开」。
+	// 因此解析不到扩展名时统一给 application/octet-stream（客户端按文件名扩展名打开），绝不落到嗅探。
 	contentType := mime.TypeByExtension(path.Ext(fullFileName))
 	if contentType == "" {
 		contentType = "application/octet-stream"
+	}
+	c.Header("Content-Type", contentType)
+
+	// 路由形如 /v1/resources/{xid}，URL 末段是随机 xid、没有扩展名；不写 Content-Disposition
+	// 浏览器只能用 xid 命名，用户拿到的文件看不出类型（也打不开）。用 inline 保留图片等资源的
+	// 内联展示能力，文件名同时给 ASCII 兜底与 RFC 5987 的 filename*（中文名不乱码）。
+	if disposition := buildContentDisposition(path.Base(fullFileName)); disposition != "" {
+		c.Header("Content-Disposition", disposition)
 	}
 
 	logger.Info("[storage] serve fs resource done",
@@ -297,6 +310,41 @@ func normalizeStoredFullFileName(fullFileName string) string {
 		return ""
 	}
 	return cleaned
+}
+
+// buildContentDisposition 为下载/内联响应构造 Content-Disposition。
+//
+// 为什么需要它：公开资源路由是 /v1/resources/{xid}，URL 末段是随机 xid、没有扩展名，
+// 不写文件名时浏览器只能用 xid 命名文件，用户拿到的文件看不出类型。
+//
+// fileName: 资源在存储上的文件名（调用方传 path.Base，不含目录）。
+// 返回值：形如 `inline; filename="a.xlsx"; filename*=UTF-8''a.xlsx`；文件名为空或清洗后为空时返回空串。
+//
+// 说明：
+//   - 用 inline 而非 attachment，保留图片/PDF 等资源被浏览器内联展示的既有能力，
+//     同时浏览器另存时仍会采用这里给出的文件名；
+//   - 去掉控制字符、双引号与反斜杠，避免响应头注入与语法破坏；
+//   - 非 ASCII 文件名（如中文）在 ASCII 的 filename 里替换为下划线兜底，
+//     真实名称走 RFC 5987 的 filename*=UTF-8''（percent-encoding）。
+func buildContentDisposition(fileName string) string {
+	cleaned := strings.Map(func(r rune) rune {
+		switch {
+		case r < 0x20, r == 0x7f, r == '"', r == '\\':
+			return -1
+		default:
+			return r
+		}
+	}, strings.TrimSpace(fileName))
+	if cleaned == "" {
+		return ""
+	}
+	ascii := strings.Map(func(r rune) rune {
+		if r < 0x20 || r > 0x7e {
+			return '_'
+		}
+		return r
+	}, cleaned)
+	return fmt.Sprintf("inline; filename=%q; filename*=UTF-8''%s", ascii, url.PathEscape(cleaned))
 }
 
 // buildResourceCacheKey 生成资源缓存键。

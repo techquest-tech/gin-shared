@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -146,6 +147,71 @@ func TestCreateFSPublicURLAndServe(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Equal(t, "hello-resource", string(body))
+}
+
+// TestServeLocalResourceByXID_ResponseHeaders 验证公开资源响应显式带 Content-Type 与文件名。
+//
+// 回归背景（2026-09-21 生产事故）：容器镜像里通常没有 /etc/mime.types，mime.TypeByExtension 返回空；
+// 旧实现把 contentType 算完只打日志、不写响应头，于是 http.ServeContent 退回按内容嗅探——
+// .xlsx 是 zip 容器（前缀 PK\x03\x04），被嗅探成 application/zip，用户下载到「zip 且打不开」；
+// 同时 /v1/resources/{xid} 无扩展名，缺少 Content-Disposition 时浏览器只能用 xid 命名。
+func TestServeLocalResourceByXID_ResponseHeaders(t *testing.T) {
+	localResourcePathByXID.Flush()
+	localResourceXIDByPath.Flush()
+	gin.SetMode(gin.TestMode)
+	const rootKey = "storage.test.headers"
+	t.Cleanup(func() {
+		viper.Set("baseUri", nil)
+		viper.Set(rootKey, nil)
+	})
+	viper.Set("baseUri", "/v1")
+
+	rootDir := t.TempDir()
+	viper.Set(rootKey+".path", rootDir)
+
+	// xlsx 是 zip 容器：以 PK\x03\x04 开头，正是会被嗅探成 application/zip 的形态。
+	name := "PRC1474205_111096482X.xlsx"
+	content := append([]byte("PK\x03\x04"), []byte("sheet-payload")...)
+	require.NoError(t, os.WriteFile(filepath.Join(rootDir, name), content, 0o644))
+
+	publicURLFunc, err := GetPublicURLFunc(rootKey)
+	require.NoError(t, err)
+	publicURL, err := CreatePublicURLWithFunc(publicURLFunc, name)
+	require.NoError(t, err)
+
+	router := gin.New()
+	require.NoError(t, (&PublicResourceComponent{}).OnEngineInited(router))
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, publicURL, nil))
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	contentType := resp.Header().Get("Content-Type")
+	require.NotEmpty(t, contentType, "必须显式写 Content-Type，否则 ServeContent 会嗅探")
+	require.NotEqual(t, "application/zip", contentType, "xlsx 不能被嗅探成 application/zip")
+	disposition := resp.Header().Get("Content-Disposition")
+	require.Contains(t, disposition, `filename="`+name+`"`)
+	require.Contains(t, disposition, "filename*=UTF-8''")
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, content, body)
+}
+
+// TestBuildContentDisposition 验证文件名兜底与响应头注入防护。
+func TestBuildContentDisposition(t *testing.T) {
+	require.Empty(t, buildContentDisposition(""))
+	require.Empty(t, buildContentDisposition("  "))
+	require.Equal(t,
+		`inline; filename="PRC1474205_111096482X.xlsx"; filename*=UTF-8''PRC1474205_111096482X.xlsx`,
+		buildContentDisposition("PRC1474205_111096482X.xlsx"))
+
+	// 中文名：5 个汉字在 ASCII 兜底里替换为 5 个下划线，真实名走 RFC 5987 percent-encoding。
+	chinese := buildContentDisposition("迪桑特清单.xlsx")
+	require.Contains(t, chinese, `filename="_____.xlsx"`)
+	require.Contains(t, chinese, `filename*=UTF-8''%E8%BF%AA%E6%A1%91%E7%89%B9%E6%B8%85%E5%8D%95.xlsx`)
+
+	// 引号/反斜杠/换行等不得进入响应头。
+	injected := buildContentDisposition("a\"b\\c\rd.xlsx")
+	require.Equal(t, `inline; filename="abcd.xlsx"; filename*=UTF-8''abcd.xlsx`, injected)
 }
 
 // TestServeLocalResourceByXID_NotFound 验证 xid 失效或不存在时返回 404。
