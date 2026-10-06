@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -55,7 +56,7 @@ func InitDBWithPrefix(sub string, prefix string) *gorm.DB {
 
 	dbSettings.SetDefault("type", "mysql")
 
-	dbType := dbSettings.GetString("type")
+	dbType := strings.ToLower(strings.TrimSpace(dbSettings.GetString("type")))
 
 	uri := dbSettings.GetString("connection")
 	maxLifetime := dbSettings.GetDuration("maxLifetime")

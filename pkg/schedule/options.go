@@ -12,6 +12,7 @@ import (
 )
 
 func resolveJobSchedule(jobname, schedule string) string {
+	jobname = strings.ToLower(strings.TrimSpace(jobname))
 	if schedule != "" {
 		return schedule
 	}
@@ -26,6 +27,7 @@ func resolveJobSchedule(jobname, schedule string) string {
 }
 
 func resolveJobNextRuntime(jobname, schedule string, finishedAt time.Time) time.Time {
+	jobname = strings.ToLower(strings.TrimSpace(jobname))
 	jobMux.RLock()
 	sj := scheduledJobs[jobname]
 	jobMux.RUnlock()

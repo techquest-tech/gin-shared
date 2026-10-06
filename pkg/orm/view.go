@@ -3,6 +3,7 @@ package orm
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"text/template"
 
 	"github.com/spf13/viper"
@@ -90,7 +91,7 @@ func InitMysqlViews(tx *gorm.DB, logger *zap.Logger) error {
 
 	tablePrefix := dbSettings.GetString("tablePrefix")
 
-	dbtype := dbSettings.GetString("type")
+	dbtype := strings.ToLower(strings.TrimSpace(dbSettings.GetString("type")))
 
 	viewSql, ok := ViewMap[dbtype]
 	if !ok {

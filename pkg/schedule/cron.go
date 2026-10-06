@@ -53,6 +53,7 @@ var (
 )
 
 func cacheJobSchedule(jobname, schedule string, next time.Time, disabled bool) {
+	jobname = strings.ToLower(strings.TrimSpace(jobname))
 	cachedJobSchedulesMu.Lock()
 	cachedJobSchedules[jobname] = cachedJobSchedule{
 		Schedule: schedule,
@@ -82,6 +83,7 @@ func persistCachedJobSchedules() {
 func Run(jobname string) (err error) {
 	rawSetting := ScheduleDisabled
 	ScheduleDisabled = true
+	jobname = strings.ToLower(strings.TrimSpace(jobname))
 	fn, ok := jobs[jobname]
 	defer func() {
 		ScheduleDisabled = rawSetting
@@ -146,6 +148,7 @@ func CreateSchedule(jobname, schedule string, cmd func(), opts ...ScheduleOption
 // It assumes cronTriggerFn is the function to be scheduled by Cron (trigger).
 // It assumes manualTriggerFn is the function to be executed (logic), stored in jobs map.
 func startCron(jobname, schedule string, cronTriggerFn func(), manualTriggerFn func(), logger *zap.Logger, opt *ScheduleOptions) error {
+	jobname = strings.ToLower(strings.TrimSpace(jobname))
 	jobs[jobname] = manualTriggerFn
 
 	if (ScheduleDisabled && !opt.NoGlobal) || schedule == "" || schedule == "-" {

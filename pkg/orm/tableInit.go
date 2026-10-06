@@ -2,7 +2,9 @@ package orm
 
 import (
 	"fmt"
+	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/asaskevich/EventBus"
 	"github.com/spf13/viper"
@@ -10,6 +12,46 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
+
+// InitDBUri 是 initDB 阶段上报到 error 通道时使用的 "uri"。
+// initDB 不是 http 请求，用命令名代替，方便在错误上报里按环节区分；
+// 各失败环节以 "initDB/xxx" 的形式上报。
+const InitDBUri = "initDB"
+
+// reportInitException 把 initDB 阶段的异常推送到全局 error 通道
+// （core.ErrorAdaptor，由 monitor 消费后写入 monitor.error / DuckDB 错误上报）。
+//
+// initDB 既没有 gin 中间件兜底、也不一定有调用方检查返回值，只写日志的问题
+// 往往没人看见，因此这里在 logger.Error 之外再做一次显式上报：
+//   - uri 标识失败环节（如 "initDB/migrateTables"）；
+//   - stack 为 nil 时自动抓取当前 goroutine 栈，panic 场景由调用方传入
+//     debug.Stack()；
+//   - 上报走非阻塞 TryPush（通道打满只丢这一条并打日志），不让上报本身把
+//     initDB 卡住。
+func reportInitException(err error, uri string, stack []byte) {
+	if err == nil {
+		return
+	}
+	if len(stack) == 0 {
+		stack = debug.Stack()
+	}
+	rr := core.ErrorReport{
+		AppName:    core.AppName,
+		AppVersion: core.Version,
+		Uri:        uri,
+		FullStack:  stack,
+		Error:      err,
+		HappendAT:  time.Now(),
+	}
+	if pusher, ok := core.ErrorAdaptor.(core.TryPusher[core.ErrorReport]); ok {
+		if !pusher.TryPush(rr) {
+			zap.L().Warn("initDB error report dropped, error channel saturated",
+				zap.String("uri", uri), zap.Error(err))
+		}
+		return
+	}
+	core.ErrorAdaptor.Push(rr)
+}
 
 var entities = make([]interface{}, 0)
 
@@ -57,6 +99,7 @@ func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus, clea
 		err := CleanViews(db, logger, viewsToClean)
 		if err != nil {
 			logger.Error("clean views failed", zap.Error(err))
+			reportInitException(err, InitDBUri+"/cleanViews", nil)
 		}
 	}
 
@@ -69,6 +112,7 @@ func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus, clea
 	err := db.AutoMigrate(entities...)
 	if err != nil {
 		logger.Error("init tables failed", zap.Error(err))
+		reportInitException(err, InitDBUri+"/migrateTables", nil)
 	} else {
 		postMigrateMu.Lock()
 		hooks := make([]func(db *gorm.DB, logger *zap.Logger) error, len(postMigrateHooks))
@@ -80,6 +124,7 @@ func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus, clea
 			}
 			if err := hook(db, logger); err != nil {
 				logger.Error("post migrate hook failed", zap.Error(err))
+				reportInitException(err, InitDBUri+"/postMigrate", nil)
 			}
 		}
 		if bus != nil {
@@ -91,6 +136,7 @@ func MigrateTableAndView(db *gorm.DB, logger *zap.Logger, bus EventBus.Bus, clea
 	err = InitMysqlViews(db, logger)
 	if err != nil {
 		logger.Error("init views failed", zap.Error(err))
+		reportInitException(err, InitDBUri+"/initViews", nil)
 	} else {
 		logger.Info("init views done.")
 	}
