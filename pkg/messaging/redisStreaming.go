@@ -33,7 +33,27 @@ const (
 	// 批量消费者把消息读进聚合窗口后，要等整批落库成功才统一 XAck，这段「在途」
 	// 时间内消息本来就挂在 PEL 里；重投若碰到它们，就会与随后的正常落库重复写一次。
 	DefaultPendingMinIdle = 60 * time.Second
+
+	// MinBlockWait 是允许下发给 Redis 的最小 XREADGROUP BLOCK 时长。
+	//
+	// 为什么需要它：go-redis 把 Block 编码成 int64(block/time.Millisecond)，小于
+	// 1ms 的正数会被整数除法截断成 0，而 Redis 的 BLOCK 0 语义是「永久阻塞」。与此
+	// 同时客户端自己的读截止仍按原值 +10s 计算（baseClient.cmdTimeout）。两者叠加，
+	// 「再等一会儿看有没有新消息」就变成「服务端无限期等待、客户端 10 秒后自己放弃」，
+	// 日志里留下一条 `read tcp ...: i/o timeout`——纯客户端自造的超时，与 Redis 健康
+	// 状况无关。亚毫秒的等待本来也聚合不到任何消息，任何调用方都不应下发这种值。
+	MinBlockWait = time.Millisecond
 )
+
+// normalizeBlock 把「正数但小于 MinBlockWait」的阻塞时长抬到 MinBlockWait，其余值
+// （0 = 不阻塞、负数 = 交给 go-redis 走 opt.ReadTimeout）原样返回，不做隐式改写。
+// 详见 MinBlockWait 的说明。
+func normalizeBlock(block time.Duration) time.Duration {
+	if block > 0 && block < MinBlockWait {
+		return MinBlockWait
+	}
+	return block
+}
 
 type MessagnePending struct {
 	Topic    string
@@ -75,6 +95,9 @@ func (msg *DefaultMessgingService) Pub(ctx context.Context, topic string, payloa
 		return resp.Err()
 	}
 	logger.Debug("pub message done")
+	// 发送端内存看门狗（缺省关闭，见 streamguard.go）：只守 messaging.guard.topics 白名单、
+	// 进程内节流、多节点用 SET NX PX 抢锁只让一个节点真正裁剪；锁命令失败时 fail-open 照常裁。
+	MaybeGuard(logger, msg.Client, topic)
 	return nil
 }
 
@@ -380,7 +403,7 @@ func (msg *DefaultMessgingService) readGroupOnce(ctx context.Context, topic, gro
 		Consumer: ConsumerName,
 		Streams:  []string{topic, ">"},
 		Count:    int64(batchSize),
-		Block:    block,
+		Block:    normalizeBlock(block),
 	}).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
@@ -465,7 +488,11 @@ func (msg *DefaultMessgingService) SubBatch(ctx context.Context, topic, group st
 				deadline := time.Now().Add(flushInterval)
 				for len(msgs) < batchSize {
 					remain := time.Until(deadline)
-					if remain <= 0 {
+					// 剩余不足 MinBlockWait 就收工。不能拿亚毫秒的 remain 去阻塞：
+					// go-redis 会把它截断成 BLOCK 0（服务端=永久阻塞），而客户端读
+					// 截止只有 remain+10s，于是必然产生一条假的 i/o timeout（详见
+					// MinBlockWait）。这点时间也聚合不到任何消息。
+					if remain < MinBlockWait {
 						break
 					}
 					more, err2 := msg.readGroupOnce(ctx, topic, group, batchSize-len(msgs), remain)
