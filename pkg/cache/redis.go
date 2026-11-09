@@ -21,6 +21,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// defaultRedisAccount 是 Redis 内建默认用户（未启用 ACL 时的唯一用户）。
+// requirepass 设置的密码归属于该用户，等价于 `AUTH default <pass>`。
+const defaultRedisAccount = "default"
+
 type RedisConfig struct {
 	Host       string
 	Port       uint
@@ -91,6 +95,13 @@ func newRedisOptions(logger *zap.Logger) *redis.Options {
 	if cfg.Account != "" {
 		opts.Username = cfg.Account
 		opts.Password = cfg.Passwd
+	} else if cfg.Passwd != "" {
+		// account 缺省但 passwd 非空：回退到 Redis 内建 default 用户，避免
+		// 「只配 passwd 不配 account 被静默忽略导致 NOAUTH」的历史问题。
+		opts.Username = defaultRedisAccount
+		opts.Password = cfg.Passwd
+		logger.Warn("redis account is empty, fallback to default account",
+			zap.String("account", defaultRedisAccount))
 	}
 	if cfg.DB > 0 {
 		opts.DB = cfg.DB

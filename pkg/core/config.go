@@ -170,10 +170,6 @@ func InitConfig(p Bootup) error {
 		}
 	}
 
-	viper.AutomaticEnv()
-	replacer := strings.NewReplacer(".", "_")
-	viper.SetEnvKeyReplacer(replacer)
-
 	configName := os.Getenv("APP_CONFIG")
 	if configName == "" {
 		configName = "app"
@@ -270,5 +266,10 @@ func ReadEncryptConfig(secret []byte, toFile string) error {
 }
 
 func init() {
+	// 把全局单例的 env 覆盖开关提到包加载期，保证任何 viper.Sub()/viper.Get* 之前就已生效：
+	//  1. 消除「依赖 dig 先解析 *zap.Logger 才触发 InitConfig→AutomaticEnv」的隐式时序假设；
+	//  2. 修复 InitConfig 在 app.cfg 解密成功后提前 return 而跳过 AutomaticEnv、导致加密部署下 env 覆盖失效的问题。
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	Provide(InitLogger)
 }
